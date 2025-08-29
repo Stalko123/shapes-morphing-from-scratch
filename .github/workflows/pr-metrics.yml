@@ -1,23 +1,60 @@
-name: PR Metrics
+name: Detailed PR Change Summary
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened]
 
 jobs:
-  metrics:
+  change-summary:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: write
-      statuses: write
     steps:
-    # Add this checkout step FIRST
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Important: fetches all history
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: PR Metrics
-      uses: microsoft/PR-Metrics@v1.7.5
-      env:
-        PR_METRICS_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      continue-on-error: true
+      - name: Generate Change Summary
+        uses: github/change-summary-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          show-lines: 5
+          group-by: category
+          output-file: changes.md
+          include-stats: true
+
+      - name: Upload Summary as PR Comment
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('changes.md', 'utf8');
+            
+            // Find existing comment to update instead of creating new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const existingComment = comments.find(comment => 
+              comment.body.includes('## 📁 Changed Files Summary')
+            );
+            
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: summary
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: summary
+              });
+            }
