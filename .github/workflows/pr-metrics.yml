@@ -1,22 +1,22 @@
-name: Detailed PR Change Summary
+name: AI PR Summary
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
 jobs:
-  change-summary:
+  pr-summary:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Generate Change Summary
-        uses: trentmillar/ChangeSummary@v1.0.2
+      - name: Summarize PR with AI
+        uses: behrouz-rad/ai-pr-summarizer@v1
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          output-type: markdown
+          llm-model: 'deepseek-coder-v2:latest'
+          prompt-file: ./assets/prompt-file.txt
+          models-file: ./assets/models-file.txt
+          version-file: ./assets/version-file.txt
+          context-window: 4096
+          upload-changes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
