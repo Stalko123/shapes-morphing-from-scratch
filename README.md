@@ -12,3 +12,4 @@ This repository explores the use of diffusion models for smoothly morphing one s
 # Action test:
 
 Just testing if the PR reviewer is working properly.
+Modified the pr.yml file
