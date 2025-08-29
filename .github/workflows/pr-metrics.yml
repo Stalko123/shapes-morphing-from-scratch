@@ -6,7 +6,12 @@ on:
 jobs:
   metrics:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      statuses: write
     steps:
-    - uses: microsoft/PR-Metrics@v1
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+    - uses: microsoft/PR-Metrics@v1.7.5
+      name: PR Metrics
+      env:
+        PR_METRICS_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      continue-on-error: true
