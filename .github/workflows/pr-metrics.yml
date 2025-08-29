@@ -1,0 +1,12 @@
+name: PR Metrics
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  metrics:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: microsoft/PR-Metrics@v1
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
