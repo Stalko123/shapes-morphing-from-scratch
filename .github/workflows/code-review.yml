@@ -12,14 +12,35 @@ jobs:
       pull-requests: write
       
     steps:
+    - name: Cache Ollama
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.ollama
+          /usr/local/bin/ollama
+        key: ollama-${{ runner.os }}-${{ hashFiles('**/ollama-version') }}
+        restore-keys: |
+          ollama-${{ runner.os }}-
+    
     - name: Install Ollama
-      run: curl -fsSL https://ollama.com/install.sh | sh
+      run: |
+        if ! command -v ollama &> /dev/null; then
+          echo "Installing Ollama..."
+          curl -fsSL https://ollama.com/install.sh | sh
+        else
+          echo "Ollama already installed"
+        fi
       
     - name: Run Ollama
       run: |
         ollama serve &
         sleep 10
-        ollama pull llama3.2:latest
+        if ! ollama list | grep -q "llama3.2:latest"; then
+          echo "Pulling llama3.2:latest..."
+          ollama pull llama3.2:latest
+        else
+          echo "llama3.2:latest already available"
+        fi
         
     - name: Checkout pull request head
       id: checkout_per_head
@@ -49,10 +70,21 @@ jobs:
         
     - name: Comment on PR
       run: |
-        REVIEW_CONTENT=$(cat /tmp/review.md)
+        # Read review content and escape for JSON
+        REVIEW_CONTENT=$(cat /tmp/review.md | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
         
+        # Create JSON payload
+        JSON_PAYLOAD=$(cat <<EOF
+{
+  "body": "## 🤖 AI Code Review Summary\n\n${REVIEW_CONTENT}\n\n---\n*This review was generated automatically using Ollama (llama3.2)*"
+}
+EOF
+)
+        
+        # Post comment using curl
         curl -X POST \
           -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -H "Accept: application/vnd.github.v3+json" \
+          -H "Content-Type: application/json" \
           https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
-          -d "{\"body\": \"## 🤖 AI Code Review Summary\n\n${REVIEW_CONTENT}\n\n---\n*This review was generated automatically using Ollama (llama3.2)*\"}"
+          -d "$JSON_PAYLOAD"
