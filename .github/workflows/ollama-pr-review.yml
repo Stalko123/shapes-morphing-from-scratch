@@ -50,6 +50,8 @@ jobs:
         
         if [ "$SHOULD_INSTALL" = true ]; then
           echo "📥 Installing Ollama..."
+          # Kill any existing ollama processes
+          sudo pkill -f ollama || true
           curl -fsSL https://ollama.com/install.sh | sh
           # Save to cache location
           mkdir -p $HOME/ollama-bin
@@ -58,11 +60,24 @@ jobs:
           echo "✅ Ollama $INSTALLED_VERSION installed and saved to cache"
         fi
         
+        # Kill any ollama processes that might be running from install
+        sudo pkill -f ollama || true
+        sleep 2
+        
     - name: Run Ollama
       run: |
         echo "Starting Ollama server..."
         ollama serve &
         sleep 8
+        
+        # Check if models directory exists and has content
+        if [ -d "$HOME/.ollama/models" ] && [ "$(ls -A $HOME/.ollama/models 2>/dev/null)" ]; then
+          echo "📁 Models directory found with content"
+          ls -la $HOME/.ollama/models/
+        else
+          echo "📁 Models directory empty or missing"
+        fi
+        
         echo "Checking for cached models..."
         if ollama list 2>/dev/null | grep -q "llama3.2:latest"; then
           echo "✅ Model llama3.2:latest found in cache"
