@@ -9,3 +9,6 @@ This repository explores the use of diffusion models for smoothly morphing one s
 
 3- Diffusion Schrödinger Bridge with Applications to Score-Based Generative Modeling : https://arxiv.org/abs/2106.01357
 
+4- Deep Unsupervised Learning using Nonequilibrium Thermodynamics : https://arxiv.org/abs/1503.03585
+
+
