@@ -1,2 +1,4 @@
-deepseek-coder-v2:latest
+# Modèles de code populaires :
+codellama:latest
 magicoder:latest
+codegemma:latest
