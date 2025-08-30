@@ -25,4 +25,6 @@ jobs:
         git checkout ${{ github.head_ref }}
         echo "Reviewing Pull Request for branch $(git branch --show): "
         mycode=$(git diff ${{ github.base_ref }})
-        $command "Review this code: $mycode, provide suggestions for improvment, coding best practices, improve readability, Give an overall rating: ✅ Looks good | ⚠️ Needs attention | ❌ Needs major changes,     Brief overview of what this PR does"
+        $command "Review this code: $mycode, provide suggestions for improvment, coding best practices, improve readability, Give an overall rating: ✅ Looks good | ⚠️ Needs attention | ❌ Needs major changes,     Brief overview of what this PR does.
+        Don't provide any code, just the summary and the review, I want everything to be in markdown format with tables that summarizes the files changed and the changes made.
+        "
