@@ -18,31 +18,55 @@ jobs:
         
     - name: Install Ollama
       run: |
+        echo "Checking for cached Ollama binary..."
+        SHOULD_INSTALL=false
+        
         if [ -f "$HOME/ollama-bin/ollama" ]; then
-          echo "Ollama found in cache"
+          echo "✅ Ollama binary found in cache"
           sudo cp $HOME/ollama-bin/ollama /usr/local/bin/ollama
           sudo chmod +x /usr/local/bin/ollama
+          
+          # Check cached version
+          CACHED_VERSION=$(ollama --version 2>/dev/null || echo "unknown")
+          echo "📦 Cached version: $CACHED_VERSION"
+          
+          # Get latest version from install script
+          LATEST_VERSION=$(curl -fsSL https://ollama.com/install.sh | grep -oP 'OLLAMA_VERSION=\K[^"]*' | head -1 || echo "unknown")
+          echo "🌐 Latest version: $LATEST_VERSION"
+          
+          if [ "$CACHED_VERSION" != "$LATEST_VERSION" ] && [ "$LATEST_VERSION" != "unknown" ]; then
+            echo "⚠️ Version mismatch! Re-installing latest version..."
+            SHOULD_INSTALL=true
+          else
+            echo "✅ Cached version is current"
+          fi
         else
-          echo "Installing Ollama..."
+          echo "❌ Ollama binary not in cache"
+          SHOULD_INSTALL=true
+        fi
+        
+        if [ "$SHOULD_INSTALL" = true ]; then
+          echo "📥 Installing Ollama..."
           curl -fsSL https://ollama.com/install.sh | sh
           # Save to cache location
           mkdir -p $HOME/ollama-bin
           cp /usr/local/bin/ollama $HOME/ollama-bin/
-          echo "Ollama installed and cached"
+          INSTALLED_VERSION=$(ollama --version 2>/dev/null || echo "unknown")
+          echo "✅ Ollama $INSTALLED_VERSION installed and saved to cache"
         fi
         
     - name: Run Ollama
       run: |
         echo "Starting Ollama server..."
         ollama serve &
-        sleep 5
-        echo "Checking for llama3.2:latest model..."
-        if ! ollama list 2>/dev/null | grep -q "llama3.2:latest"; then
-          echo "Pulling llama3.2:latest model..."
-          ollama pull llama3.2:latest
-          echo "Model downloaded"
+        sleep 8
+        echo "Checking for cached models..."
+        if ollama list 2>/dev/null | grep -q "llama3.2:latest"; then
+          echo "✅ Model llama3.2:latest found in cache"
         else
-          echo "Model found in cache"
+          echo "❌ Model not in cache, downloading..."
+          ollama pull llama3.2:latest
+          echo "✅ Model downloaded and cached"
         fi
         
     - name: Checkout pull request head
