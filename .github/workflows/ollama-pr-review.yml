@@ -12,20 +12,23 @@ jobs:
       uses: actions/cache@v4
       with:
         path: |
-          /usr/local/bin/ollama
-          /usr/share/ollama
           ~/.ollama
-          /tmp/ollama*
-        key: ollama-${{ runner.os }}-v2
+          ~/ollama-bin
+        key: ollama-${{ runner.os }}-v3
         
     - name: Install Ollama
       run: |
-        if ! command -v ollama &> /dev/null; then
+        if [ -f "$HOME/ollama-bin/ollama" ]; then
+          echo "Ollama found in cache"
+          sudo cp $HOME/ollama-bin/ollama /usr/local/bin/ollama
+          sudo chmod +x /usr/local/bin/ollama
+        else
           echo "Installing Ollama..."
           curl -fsSL https://ollama.com/install.sh | sh
-          echo "Ollama installed"
-        else
-          echo "Ollama found in cache"
+          # Save to cache location
+          mkdir -p $HOME/ollama-bin
+          cp /usr/local/bin/ollama $HOME/ollama-bin/
+          echo "Ollama installed and cached"
         fi
         
     - name: Run Ollama
