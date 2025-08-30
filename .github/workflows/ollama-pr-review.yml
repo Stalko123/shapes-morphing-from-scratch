@@ -1,100 +1,62 @@
 name: Code Review
-'on':
+on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
-jobs: 
+
+jobs:
   summarize:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+
     steps:
-    - name: Cache Ollama
+    - name: Cache Ollama binary
       uses: actions/cache@v4
       with:
-        path: |
-          ~/.ollama
-          ~/ollama-bin
-        key: ollama-${{ runner.os }}-${{ github.repository }}-v3
-        restore-keys: |
-          ollama-${{ runner.os }}-${{ github.repository }}-
-          ollama-${{ runner.os }}-
-        
+        path: ~/ollama-bin
+        key: ollama-${{ runner.os }}-binary-v1
+
     - name: Install Ollama
       run: |
-        echo "Checking for cached Ollama binary..."
-        SHOULD_INSTALL=false
-        
         if [ -f "$HOME/ollama-bin/ollama" ]; then
-          echo "✅ Ollama binary found in cache"
+          echo "✅ Using cached Ollama binary"
           sudo cp $HOME/ollama-bin/ollama /usr/local/bin/ollama
           sudo chmod +x /usr/local/bin/ollama
-          
-          # Check cached version
-          CACHED_VERSION=$(ollama --version 2>/dev/null || echo "unknown")
-          echo "📦 Cached version: $CACHED_VERSION"
-          
-          # Get latest version from install script
-          LATEST_VERSION=$(curl -fsSL https://ollama.com/install.sh | grep -oP 'OLLAMA_VERSION=\K[^"]*' | head -1 || echo "unknown")
-          echo "🌐 Latest version: $LATEST_VERSION"
-          
-          if [ "$CACHED_VERSION" != "$LATEST_VERSION" ] && [ "$LATEST_VERSION" != "unknown" ]; then
-            echo "⚠️ Version mismatch! Re-installing latest version..."
-            SHOULD_INSTALL=true
-          else
-            echo "✅ Cached version is current"
-          fi
         else
-          echo "❌ Ollama binary not in cache"
-          SHOULD_INSTALL=true
-        fi
-        
-        if [ "$SHOULD_INSTALL" = true ]; then
           echo "📥 Installing Ollama..."
-          # Kill any existing ollama processes
-          sudo pkill -f ollama || true
           curl -fsSL https://ollama.com/install.sh | sh
-          # Save to cache location
           mkdir -p $HOME/ollama-bin
           cp /usr/local/bin/ollama $HOME/ollama-bin/
-          INSTALLED_VERSION=$(ollama --version 2>/dev/null || echo "unknown")
-          echo "✅ Ollama $INSTALLED_VERSION installed and saved to cache"
+          echo "✅ Ollama installed and cached"
         fi
-        
-        # Kill any ollama processes that might be running from install
-        sudo pkill -f ollama || true
-        sleep 2
-        
+
+    - name: Cache Ollama models
+      uses: actions/cache@v4
+      with:
+        path: ~/.ollama/models
+        key: ollama-${{ runner.os }}-models-v1
+
     - name: Run Ollama
       run: |
-        echo "Starting Ollama server..."
+        echo "🚀 Starting Ollama server..."
         ollama serve &
         sleep 8
-        
-        # Check if models directory exists and has content
-        if [ -d "$HOME/.ollama/models" ] && [ "$(ls -A $HOME/.ollama/models 2>/dev/null)" ]; then
-          echo "📁 Models directory found with content"
-          ls -la $HOME/.ollama/models/
-        else
-          echo "📁 Models directory empty or missing"
-        fi
-        
-        echo "Checking for cached models..."
+
+        echo "📦 Checking for model llama3.2:latest..."
         if ollama list 2>/dev/null | grep -q "llama3.2:latest"; then
-          echo "✅ Model llama3.2:latest found in cache"
+          echo "✅ Model already available"
         else
-          echo "❌ Model not in cache, downloading..."
+          echo "⬇️ Downloading llama3.2:latest..."
           ollama pull llama3.2:latest
-          echo "✅ Model downloaded and cached"
+          echo "✅ Model cached"
         fi
-        
+
     - name: Checkout pull request head
-      id: checkout_per_head
       uses: actions/checkout@v2
       with:
         fetch-depth: 0
-        
+
     - name: Code reviewing
-      id: review
       run: |
         git checkout ${{ github.base_ref }}
         git pull
@@ -102,14 +64,15 @@ jobs:
         git checkout ${{ github.head_ref }}
         echo "Reviewing Pull Request for branch $(git branch --show): "
         mycode=$(git diff ${{ github.base_ref }})
-        review_output=$($command "Review this code: $mycode, provide suggestions for improvment, coding best practices, improve readability, Give an overall rating: ✅ Looks good | ⚠️ Needs attention | ❌ Needs major changes, Brief overview of what this PR does. Don't provide any code, just the summary and the review, I want everything to be in markdown format with tables that summarizes the files changed and the changes made.")
-        
+
+        review_output=$($command "Review this code: $mycode, provide suggestions for improvement, coding best practices, improve readability, Give an overall rating: ✅ Looks good | ⚠️ Needs attention | ❌ Needs major changes, Brief overview of what this PR does. Don't provide any code, just the summary and the review, I want everything to be in markdown format with tables that summarize the files changed and the changes made.")
+
         echo "$review_output" > /tmp/review.md
-        
+
     - name: Comment on PR
       run: |
         REVIEW_CONTENT=$(cat /tmp/review.md | jq -Rs .)
-        
+
         curl -X POST \
           -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -H "Content-Type: application/json" \
