@@ -3,6 +3,11 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
 
+# prevent concurrent runs for the same PR (queues them)
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
 jobs:
   summarize:
     runs-on: ubuntu-latest
@@ -10,71 +15,133 @@ jobs:
       pull-requests: write
 
     steps:
-    - name: Cache Ollama binary
-      uses: actions/cache@v4
-      with:
-        path: ~/ollama-bin
-        key: ollama-${{ runner.os }}-binary-v1
+      - name: Cache Ollama binary
+        uses: actions/cache@v4
+        with:
+          path: ~/ollama-bin
+          key: ollama-${{ runner.os }}-binary-v1
 
-    - name: Install Ollama
-      run: |
-        if [ -f "$HOME/ollama-bin/ollama" ]; then
-          echo "✅ Using cached Ollama binary"
-          sudo cp $HOME/ollama-bin/ollama /usr/local/bin/ollama
-          sudo chmod +x /usr/local/bin/ollama
-        else
-          echo "📥 Installing Ollama..."
-          curl -fsSL https://ollama.com/install.sh | sh
-          mkdir -p $HOME/ollama-bin
-          cp /usr/local/bin/ollama $HOME/ollama-bin/
-          echo "✅ Ollama installed and cached"
-        fi
+      - name: Install Ollama (if missing)
+        run: |
+          set -euo pipefail
+          if command -v ollama >/dev/null 2>&1; then
+            echo "ollama already installed: $(ollama --version || true)"
+          elif [ -f "$HOME/ollama-bin/ollama" ]; then
+            echo "Using cached binary from $HOME/ollama-bin"
+            sudo cp "$HOME/ollama-bin/ollama" /usr/local/bin/ollama
+            sudo chmod +x /usr/local/bin/ollama
+          else
+            echo "Installing ollama via install script..."
+            curl -fsSL https://ollama.com/install.sh | sh
+            mkdir -p "$HOME/ollama-bin"
+            if [ -f /usr/local/bin/ollama ]; then
+              cp /usr/local/bin/ollama "$HOME/ollama-bin/"
+            fi
+          fi
 
-    - name: Cache Ollama models
-      uses: actions/cache@v4
-      with:
-        path: ~/.ollama/models
-        key: ollama-${{ runner.os }}-models-v1
+      - name: Restore model cache (user model dir)
+        uses: actions/cache@v4
+        with:
+          # primary model path we use on runners — keep it small/explicit
+          path: |
+            ~/.ollama/models
+          key: ollama-${{ runner.os }}-models-llama3.2-v1
+          restore-keys: |
+            ollama-${{ runner.os }}-models-llama3.2-
 
-    - name: Run Ollama
-      run: |
-        echo "🚀 Starting Ollama server..."
-        ollama serve &
-        sleep 8
+      - name: Ensure Ollama server + pull model (blocking)
+        run: |
+          set -euo pipefail
+          # Use the user model dir (runner-writable)
+          export OLLAMA_MODELS="$HOME/.ollama/models"
+          mkdir -p "$OLLAMA_MODELS"
 
-        echo "📦 Checking for model llama3.2:latest..."
-        if ollama list 2>/dev/null | grep -q "llama3.2:latest"; then
-          echo "✅ Model already available"
-        else
-          echo "⬇️ Downloading llama3.2:latest..."
-          ollama pull llama3.2:latest
-          echo "✅ Model cached"
-        fi
+          # If the server responds (systemd or previously started), don't start it
+          if curl -sSf http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+            echo "Ollama API already listening at 127.0.0.1:11434"
+          else
+            # If systemd-managed ollama service is active, give it a moment
+            if sudo systemctl >/dev/null 2>&1 && sudo systemctl is-active --quiet ollama >/dev/null 2>&1; then
+              echo "systemd ollama service appears active — waiting a bit for it to be responsive..."
+              for i in 1 2 3 4 5; do
+                if curl -sSf http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+                  echo "Ollama now responsive"
+                  break
+                fi
+                sleep 2
+              done
+            else
+              echo "Starting ollama serve in background (runner user)..."
+              nohup ollama serve > /tmp/ollama.log 2>&1 &
+              # wait for HTTP to respond
+              for i in $(seq 1 20); do
+                if curl -sSf http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+                  echo "Ollama server up"
+                  break
+                fi
+                sleep 1
+              done
+            fi
+          fi
 
-    - name: Checkout pull request head
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+          # At this point HTTP API should be reachable; ensure the model is present.
+          MODEL="llama3.2:latest"
+          if ollama list 2>/dev/null | grep -q "llama3.2:latest"; then
+            echo "Model $MODEL already present"
+          else
+            echo "Model $MODEL not found locally -> pulling now (this blocks until finished)"
+            ollama pull $MODEL
+            echo "Pull complete"
+          fi
 
-    - name: Code reviewing
-      run: |
-        git checkout ${{ github.base_ref }}
-        git pull
-        command="ollama run llama3.2:latest"
-        git checkout ${{ github.head_ref }}
-        echo "Reviewing Pull Request for branch $(git branch --show): "
-        mycode=$(git diff ${{ github.base_ref }})
+          # Sanity wait: ensure model appears in list (avoid race with subsequent steps)
+          for i in $(seq 1 30); do
+            if ollama list 2>/dev/null | grep -q "llama3.2:latest"; then
+              echo "Model visible to ollama"
+              break
+            fi
+            echo "Waiting for model to be visible..."
+            sleep 2
+          done
 
-        review_output=$($command "Review this code: $mycode, provide suggestions for improvement, coding best practices, improve readability, Give an overall rating: ✅ Looks good | ⚠️ Needs attention | ❌ Needs major changes, Brief overview of what this PR does. Don't provide any code, just the summary and the review, I want everything to be in markdown format with tables that summarize the files changed and the changes made.")
+      - name: Checkout pull request head
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-        echo "$review_output" > /tmp/review.md
+      - name: Code reviewing
+        id: review
+        run: |
+          set -euo pipefail
+          # ensure we're in the repo workspace
+          git fetch --all
+          git checkout "${{ github.base_ref }}" || true
+          git pull --ff-only || true
+          git checkout "${{ github.head_ref }}"
 
-    - name: Comment on PR
-      run: |
-        REVIEW_CONTENT=$(cat /tmp/review.md | jq -Rs .)
+          echo "Gathering diff against base (${{ github.base_ref }})..."
+          # put the diff in a file (safer for big diffs)
+          git --no-pager diff "${{ github.base_ref }}" > /tmp/pr.diff || true
 
-        curl -X POST \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          -H "Content-Type: application/json" \
-          https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
-          -d "{\"body\": $REVIEW_CONTENT}"
+          # Run Ollama (model already pulled above) -- send prompt via stdin to avoid shell quoting issues
+          PROMPT='Review this code patch file /tmp/pr.diff. Provide suggestions for improvement, coding best practices, readability improvements. Give an overall rating: ✅ Looks good | ⚠️ Needs attention | ❌ Needs major changes. Give a brief overview of what this PR does. Output must be pure markdown. Include a markdown table summarizing changed files and changes. Do NOT include code snippets — only commentary, summary, recommendations, and the table.'
+          # Use ollama run and feed prompt + diff (avoid the run starting a pull because model already present)
+          (echo "$PROMPT"; echo ""; sed -n '1,50000p' /tmp/pr.diff) | ollama run llama3.2:latest > /tmp/review.md || true
+
+      - name: Comment on PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ ! -s /tmp/review.md ]; then
+            echo "No review output produced — writing fallback message."
+            echo "Ollama review failed or produced no output." > /tmp/review.md
+          fi
+          REVIEW_CONTENT=$(jq -Rs . </tmp/review.md)
+          API_URL="https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
+          curl -sS -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            "$API_URL" \
+            -d "{\"body\": $REVIEW_CONTENT}" \
+            || (echo "Failed to post comment" && cat /tmp/review.md && exit 0)
