@@ -1,0 +1,28 @@
+name: Code Review
+'on':
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+jobs: 
+  summarize:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install Ollama
+      run: curl -fsSL https://ollama.com/install.sh | sh
+    - name: Run Ollama
+      run: |
+        ollama serve &
+        ollama pull llama3.2:latest
+    - name: Checkout pull request head
+      id: checkout_per_head
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Code reviewing
+      run: |
+        git checkout ${{ github.base_ref }}
+        git pull
+        command="ollama run llama3.2:latest"
+        git checkout ${{ github.head_ref }}
+        echo "Reviewing Pull Request for branch $(git branch --show): "
+        mycode=$(git diff ${{ github.base_ref }})
+        $command "Review this code: $mycode, provide suggestions for improvment, coding best practices, improve readability, Give an overall rating: ✅ Looks good | ⚠️ Needs attention | ❌ Needs major changes,     Brief overview of what this PR does"
