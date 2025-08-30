@@ -1,1 +1,1 @@
-codellama:latest
+deepseek-coder-v2:latest
