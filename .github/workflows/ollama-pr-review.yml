@@ -1,95 +1,99 @@
-name: PR Summarizer
-
-on:
+name: Code Review
+'on':
   pull_request:
     types: [opened, synchronize, reopened, edited]
-
-jobs:
-  summarize-pr:
+jobs: 
+  summarize:
     runs-on: ubuntu-latest
-    env:
-      OLLAMA_MODELS: ${{ github.workspace }}/.ollama-models
-
+    permissions:
+      pull-requests: write
     steps:
-      # 1️⃣ Checkout repo
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      # 2️⃣ Cache Ollama models directory
-      - name: Cache Ollama models
-        uses: actions/cache@v4
-        with:
-          path: .ollama-models
-          key: ollama-models-${{ runner.os }}-v1
-          restore-keys: |
-            ollama-models-${{ runner.os }}-
-
-      # 3️⃣ Install Ollama
-      - name: Install Ollama
-        run: |
-          if ! command -v ollama &> /dev/null; then
-            curl -fsSL https://ollama.com/install.sh | sh
+    - name: Cache Ollama
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.ollama
+          ~/ollama-bin
+        key: ollama-${{ runner.os }}-v3
+        
+    - name: Install Ollama
+      run: |
+        echo "Checking for cached Ollama binary..."
+        SHOULD_INSTALL=false
+        
+        if [ -f "$HOME/ollama-bin/ollama" ]; then
+          echo "✅ Ollama binary found in cache"
+          sudo cp $HOME/ollama-bin/ollama /usr/local/bin/ollama
+          sudo chmod +x /usr/local/bin/ollama
+          
+          # Check cached version
+          CACHED_VERSION=$(ollama --version 2>/dev/null || echo "unknown")
+          echo "📦 Cached version: $CACHED_VERSION"
+          
+          # Get latest version from install script
+          LATEST_VERSION=$(curl -fsSL https://ollama.com/install.sh | grep -oP 'OLLAMA_VERSION=\K[^"]*' | head -1 || echo "unknown")
+          echo "🌐 Latest version: $LATEST_VERSION"
+          
+          if [ "$CACHED_VERSION" != "$LATEST_VERSION" ] && [ "$LATEST_VERSION" != "unknown" ]; then
+            echo "⚠️ Version mismatch! Re-installing latest version..."
+            SHOULD_INSTALL=true
           else
-            echo "✅ Ollama already installed"
+            echo "✅ Cached version is current"
           fi
-
-      # 4️⃣ Ensure llama3.2 model is present
-      - name: Ensure llama3.2 model
-        run: |
-          mkdir -p "$OLLAMA_MODELS"
-
-          echo "🚀 Starting Ollama server..."
-          ollama serve > /tmp/ollama.log 2>&1 &
-          OLLAMA_PID=$!
-          sleep 10
-
-          if ollama list 2>/dev/null | grep -q "llama3.2"; then
-            echo "✅ Model already available"
-          else
-            echo "⬇️ Pulling llama3.2:latest..."
-            ollama pull llama3.2:latest || (echo "❌ Pull failed"; cat /tmp/ollama.log; exit 1)
-          fi
-
-          kill $OLLAMA_PID || true
-          echo "📂 Models directory contents:"
-          ls -Rlh "$OLLAMA_MODELS"
-
-      # 5️⃣ Get PR content
-      - name: Get PR content
-        id: pr
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const pr = context.payload.pull_request
-            return {
-              title: pr.title,
-              body: pr.body,
-              url: pr.html_url
-            }
-
-      # 6️⃣ Generate PR summary
-      - name: Run PR Summarizer
-        run: |
-          echo "🚀 Starting Ollama server..."
-          ollama serve > /tmp/ollama.log 2>&1 &
-          OLLAMA_PID=$!
-          sleep 10
-
-          PROMPT="Review this pull request:\n\nTitle: ${{ steps.pr.outputs.title }}\n\nDescription: ${{ steps.pr.outputs.body }}\n\nURL: ${{ steps.pr.outputs.url }}\n\nProvide suggestions for improvement, coding best practices, readability improvements. Give an overall rating: ✅ Looks good | ⚠️ Needs attention | ❌ Needs major changes. Output in markdown with tables summarizing the files changed."
-
-          echo -e "$PROMPT" | ollama run llama3.2:latest > pr-summary.txt
-
-          kill $OLLAMA_PID || true
-          cat pr-summary.txt
-
-      # 7️⃣ Post PR summary as a comment
-      - name: Post PR summary comment
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: "🤖 PR Summary"
-          message: |
-            Here’s an AI-generated summary:
-
-            ```
-            $(cat pr-summary.txt)
-            ```
+        else
+          echo "❌ Ollama binary not in cache"
+          SHOULD_INSTALL=true
+        fi
+        
+        if [ "$SHOULD_INSTALL" = true ]; then
+          echo "📥 Installing Ollama..."
+          curl -fsSL https://ollama.com/install.sh | sh
+          # Save to cache location
+          mkdir -p $HOME/ollama-bin
+          cp /usr/local/bin/ollama $HOME/ollama-bin/
+          INSTALLED_VERSION=$(ollama --version 2>/dev/null || echo "unknown")
+          echo "✅ Ollama $INSTALLED_VERSION installed and saved to cache"
+        fi
+        
+    - name: Run Ollama
+      run: |
+        echo "Starting Ollama server..."
+        ollama serve &
+        sleep 8
+        echo "Checking for cached models..."
+        if ollama list 2>/dev/null | grep -q "llama3.2:latest"; then
+          echo "✅ Model llama3.2:latest found in cache"
+        else
+          echo "❌ Model not in cache, downloading..."
+          ollama pull llama3.2:latest
+          echo "✅ Model downloaded and cached"
+        fi
+        
+    - name: Checkout pull request head
+      id: checkout_per_head
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+        
+    - name: Code reviewing
+      id: review
+      run: |
+        git checkout ${{ github.base_ref }}
+        git pull
+        command="ollama run llama3.2:latest"
+        git checkout ${{ github.head_ref }}
+        echo "Reviewing Pull Request for branch $(git branch --show): "
+        mycode=$(git diff ${{ github.base_ref }})
+        review_output=$($command "Review this code: $mycode, provide suggestions for improvment, coding best practices, improve readability, Give an overall rating: ✅ Looks good | ⚠️ Needs attention | ❌ Needs major changes, Brief overview of what this PR does. Don't provide any code, just the summary and the review, I want everything to be in markdown format with tables that summarizes the files changed and the changes made.")
+        
+        echo "$review_output" > /tmp/review.md
+        
+    - name: Comment on PR
+      run: |
+        REVIEW_CONTENT=$(cat /tmp/review.md | jq -Rs .)
+        
+        curl -X POST \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Content-Type: application/json" \
+          https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+          -d "{\"body\": $REVIEW_CONTENT}"
