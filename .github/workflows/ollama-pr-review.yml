@@ -12,21 +12,34 @@ jobs:
       uses: actions/cache@v4
       with:
         path: |
-          ~/.ollama
           /usr/local/bin/ollama
-        key: ollama-${{ runner.os }}
+          /usr/share/ollama
+          ~/.ollama
+          /tmp/ollama*
+        key: ollama-${{ runner.os }}-v2
         
     - name: Install Ollama
       run: |
         if ! command -v ollama &> /dev/null; then
+          echo "Installing Ollama..."
           curl -fsSL https://ollama.com/install.sh | sh
+          echo "Ollama installed"
+        else
+          echo "Ollama found in cache"
         fi
         
     - name: Run Ollama
       run: |
+        echo "Starting Ollama server..."
         ollama serve &
-        if ! ollama list | grep -q "llama3.2:latest"; then
+        sleep 5
+        echo "Checking for llama3.2:latest model..."
+        if ! ollama list 2>/dev/null | grep -q "llama3.2:latest"; then
+          echo "Pulling llama3.2:latest model..."
           ollama pull llama3.2:latest
+          echo "Model downloaded"
+        else
+          echo "Model found in cache"
         fi
         
     - name: Checkout pull request head
