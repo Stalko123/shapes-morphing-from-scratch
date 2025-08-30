@@ -25,3 +25,8 @@ def mathematical_functions(x):
         'square_root': square_root(x),
         'factorial': factorial(int(x))  # Factorial only for non-negative integers
     }
+
+def code ( i ):
+    k=i
+
+    return          k
