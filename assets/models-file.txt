@@ -1,4 +1,1 @@
-# Modèles de code populaires :
 codellama:latest
-magicoder:latest
-codegemma:latest
