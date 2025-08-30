@@ -1,94 +1,75 @@
-name: Code Review
+name: PR Summarizer
+
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
-
-concurrency:
-  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
 
 jobs:
-  summarize:
+  summarize-pr:
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
 
     steps:
-      - name: Cache Ollama binary
-        uses: actions/cache@v4
-        with:
-          path: ~/ollama-bin
-          key: ollama-${{ runner.os }}-binary-v1
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Install Ollama (if missing)
-        run: |
-          if [ -f "$HOME/ollama-bin/ollama" ]; then
-            echo "✅ Using cached Ollama binary"
-            sudo cp $HOME/ollama-bin/ollama /usr/local/bin/ollama
-            sudo chmod +x /usr/local/bin/ollama
-          else
-            echo "📥 Installing Ollama..."
-            curl -fsSL https://ollama.com/install.sh | sh
-            mkdir -p $HOME/ollama-bin
-            cp /usr/local/bin/ollama $HOME/ollama-bin/
-          fi
-
-      # ⬇️ Download the model artifact if it exists
-      - name: Download model artifact (if available)
+      # 1️⃣ Restore previously cached Ollama model if available
+      - name: Download Ollama model artifact
         uses: actions/download-artifact@v4
         with:
           name: ollama-models
           path: ~/.ollama/models
         continue-on-error: true
 
-      # ⬇️ Only pull the model if it's missing
-      - name: Ensure model present
+      # 2️⃣ Install Ollama
+      - name: Install Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          echo "✅ Ollama installed"
+
+      # 3️⃣ Ensure llama3.2 model is installed
+      - name: Ensure llama3.2 model is installed
         run: |
           export OLLAMA_MODELS="$HOME/.ollama/models"
           mkdir -p "$OLLAMA_MODELS"
 
-          if ollama list 2>/dev/null | grep -q "llama3.2:latest"; then
-            echo "✅ Model already available"
+          echo "🚀 Starting Ollama server..."
+          ollama serve > /tmp/ollama.log 2>&1 &
+          OLLAMA_PID=$!
+
+          # Wait a bit longer for server
+          sleep 10
+
+          if ollama list 2>/dev/null | grep -q "llama3.2"; then
+            echo "✅ llama3.2 model already available"
           else
-            echo "⬇️ Pulling llama3.2:latest..."
-            ollama serve &
-            sleep 5
-            ollama pull llama3.2:latest
+            echo "📦 Pulling llama3.2:latest..."
+            ollama pull llama3.2:latest || (echo "❌ Pull failed"; cat /tmp/ollama.log; exit 1)
           fi
 
-      # ⬆️ Upload the models dir so future runs don’t redownload
-      - name: Upload model artifact
+          # Stop Ollama
+          kill $OLLAMA_PID || true
+
+          echo "📂 Models directory contents:"
+          ls -Rlh "$OLLAMA_MODELS" || true
+
+      # 4️⃣ Upload Ollama model for future runs
+      - name: Upload Ollama model artifact
+        if: success() && (hashFiles('~/.ollama/models/**') != '')
         uses: actions/upload-artifact@v4
         with:
           name: ollama-models
-          path: ~/.ollama/models
+          path: ~/.ollama/models/**
           retention-days: 7
 
-      - name: Checkout pull request head
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Code reviewing
+      # 5️⃣ Run summarizer using the model
+      - name: Run PR Summarizer
         run: |
-          git fetch --all
-          git checkout "${{ github.base_ref }}"
-          git pull --ff-only || true
-          git checkout "${{ github.head_ref }}"
-
-          mycode=$(git diff "${{ github.base_ref }}")
-
-          PROMPT="Review this code: $mycode, provide suggestions for improvement, coding best practices, readability improvements. Give an overall rating: ✅ Looks good | ⚠️ Needs attention | ❌ Needs major changes. Give a brief overview of what this PR does. Output must be in markdown with tables summarizing the files changed."
-
-          echo "$PROMPT" | ollama run llama3.2:latest > /tmp/review.md
-
-      - name: Comment on PR
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          REVIEW_CONTENT=$(jq -Rs . </tmp/review.md)
-          curl -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Content-Type: application/json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
-            -d "{\"body\": $REVIEW_CONTENT}"
+          ollama serve > /tmp/ollama.log 2>&1 &
+          OLLAMA_PID=$!
+          sleep 10
+          
+          echo "📝 Generating PR summary..."
+          # Example prompt (replace with your own summarizer script)
+          ollama run llama3.2:latest "Summarize this pull request." > pr-summary.txt
+          
+          kill $OLLAMA_PID || true
+          cat pr-summary.txt
