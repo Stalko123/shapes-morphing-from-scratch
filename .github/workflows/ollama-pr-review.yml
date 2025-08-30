@@ -14,7 +14,10 @@ jobs:
         path: |
           ~/.ollama
           ~/ollama-bin
-        key: ollama-${{ runner.os }}-v3
+        key: ollama-${{ runner.os }}-${{ github.repository }}-v3
+        restore-keys: |
+          ollama-${{ runner.os }}-${{ github.repository }}-
+          ollama-${{ runner.os }}-
         
     - name: Install Ollama
       run: |
