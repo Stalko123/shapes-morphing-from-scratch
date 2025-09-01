@@ -1,3 +1,5 @@
+import torch
+import random
 
 
 class DDPM:
@@ -28,7 +30,7 @@ class DDPM:
         
         total = 0
         for _ in range(self.num_trials):
-            t = torch.random.randint(0, self.T_max)
+            t = random.randint(0, self.T_max)
             x_blurred, white_noise = self.blurData(x, t)
             preds = self.denoiser(x_blurred)
             total += torch.nn.MSE(preds, white_noise)
