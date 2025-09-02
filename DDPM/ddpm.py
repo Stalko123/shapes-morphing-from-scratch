@@ -42,14 +42,11 @@ class DDPM:
         preds = self.denoiser(x_blurred, t)
         loss = F.mse_loss(preds, white_noise, reduction='mean')
         return loss
-
-
-    def __call__(self, x):
-        return self.denoiser(x)
+    
     
     def generate(self, n_samples):
-        noise = torch.randn(n_samples, self.dataset.dims)
-        return DDPM(noise)
+        #TODO
+        pass
 
 
 
