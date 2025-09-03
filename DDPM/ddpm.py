@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple, Optional
 from ..utils.argparser import args
+import matplotlib.pyplot as plt
+import numpy as np
+import PIL
 
 
 class DDPM:
@@ -19,6 +22,8 @@ class DDPM:
         self.alphas_bar: torch.Tensor = DDPM.compute_alphas_bar(self.alphas)
         self.num_trials: int = args.num_trials
         self.t_max: int = args.t_max
+
+
 
     @staticmethod
     def compute_alphas_bar(alphas: torch.Tensor) -> torch.Tensor:
@@ -61,6 +66,7 @@ class DDPM:
     def generate(
         self, 
         n_samples: int, 
+        visualise: bool = False,
         device: Optional[torch.device] = None
     ) -> torch.Tensor:
         """
@@ -87,7 +93,11 @@ class DDPM:
             dtype=dtype,
         )
 
-        for t in reversed(range(self.t_max)):
+        if visualise:
+            visualiser= Visualiser()
+            frames = [x_t]
+
+        for t in reversed(range(self.t_max)):                
             t_batch = torch.full((n_samples,), t, device=device, dtype=torch.long)
 
             eps_theta = self.denoiser(x_t, t_batch)
@@ -99,8 +109,12 @@ class DDPM:
                 sigma = torch.sqrt(beta_t[t])
                 z = torch.randn_like(x_t)
                 x_t = mean + sigma * z
+                
             else:
                 x_t = mean
+            
+            if visualise:
+                    frames.append(x_t)
 
         return x_t
 
