@@ -6,12 +6,11 @@ from PIL import Image
 
 class Visualiser : 
 
-    def __init__(self, args, DDPM):
+    def __init__(self, args):
 
         self.fps = args.fps
         self.output_dir = args.output_dir
-        self.visualise_every_n_iters = args.visualise_every_n_iters
-
+        self.denoiser_weights = args.denoiser_weights
 
 
     def save_gif(self, frames, path, fps=5):
@@ -59,10 +58,8 @@ class Visualiser :
             
             pil_frames.append(pil_frame)
         
-        # Calculate duration in milliseconds
-        duration = int(1000 / fps)
+        duration = int(1000 / fps) #(ms)
         
-        # Save as GIF
         pil_frames[0].save(
             path,
             save_all=True,
@@ -73,4 +70,8 @@ class Visualiser :
 
 
 
-                   
+    
+    def generate_gif(self, path, n_gifs):
+        #load the denoiser weights, and visualise n_gifs random images from the dataset
+
+        pass

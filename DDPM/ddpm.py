@@ -6,6 +6,7 @@ from ..utils.argparser import args
 import matplotlib.pyplot as plt
 import numpy as np
 import PIL
+from ..visualiser import Visualiser
 
 
 class DDPM:
@@ -94,7 +95,7 @@ class DDPM:
         )
 
         if visualise:
-            visualiser= Visualiser()
+            visualiser= Visualiser(args, self)
             frames = [x_t]
 
         for t in reversed(range(self.t_max)):                
@@ -115,6 +116,9 @@ class DDPM:
             
             if visualise:
                     frames.append(x_t)
+        
+        if visualise:
+            visualiser.save_gif(frames, args.output_dir)
 
         return x_t
 
