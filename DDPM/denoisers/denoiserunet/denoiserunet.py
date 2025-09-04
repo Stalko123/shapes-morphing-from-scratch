@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import Sequence, Tuple, Union, Literal
-from model_utils import TimeEmbed, get_activation, get_norm2d, conv3x3
+from utils.model_utils import TimeEmbed, get_activation, get_norm2d, conv3x3
 from resblock import ResBlock
 from downsample import Downsample
 from upsample import Upsample
@@ -11,7 +11,7 @@ class DenoiserUNet(nn.Module):
     """
     UNet denoiser:
       - Down path: [num_res_blocks per stage] -> Downsample
-      - Bottleneck: 2 ResBlocks
+      - Bottleneck: n ResBlocks
       - Up path: Upsample -> concat skip -> [num_res_blocks per stage]
       - Time conditioning: sinusoidal -> MLP -> FiLM in ResBlocks
     """
