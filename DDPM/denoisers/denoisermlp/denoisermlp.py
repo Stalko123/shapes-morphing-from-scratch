@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Sequence, Union, Tuple, Literal
 import math
-from model_utils import sinusoidal_time_embed, get_activation, get_norm1d
+from utils.model_utils import sinusoidal_time_embed, get_activation, get_norm1d
 
 
 def get_activation(name: str) -> nn.Module:
