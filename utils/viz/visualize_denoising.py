@@ -12,7 +12,7 @@ import argparse
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from DDPM.ddpm import DDPM
-from DDPM.denoisers.denoisermlp import DenoiserMLP
+from DDPM.denoisers.denoisermlp.denoisermlp import DenoiserMLP
 
 
 def load_model(checkpoint_path):

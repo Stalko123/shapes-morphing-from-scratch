@@ -1,10 +1,7 @@
-import matplotlib.pyplot as plt
-import PIL
 import numpy as np
-import torch
 from PIL import Image
 
-class Visualiser : 
+class Visualizer : 
 
     def __init__(self, args):
 

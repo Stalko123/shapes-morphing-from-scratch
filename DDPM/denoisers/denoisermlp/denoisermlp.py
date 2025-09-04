@@ -5,28 +5,6 @@ import math
 from utils.model_utils import sinusoidal_time_embed, get_activation, get_norm1d
 
 
-def get_activation(name: str) -> nn.Module:
-    name = (name or "silu").lower()
-    if name == "relu":
-        return nn.ReLU()
-    if name == "gelu":
-        return nn.GELU()
-    if name == "tanh":
-        return nn.Tanh()
-    # default
-    return nn.SiLU()
-
-
-def get_norm1d(kind: str, dim: int) -> nn.Module:
-    kind = (kind or "none").lower()
-    if kind == "layer":
-        return nn.LayerNorm(dim)
-    if kind == "batch":
-        # BatchNorm1d expects [B, F] and normalizes over batch
-        return nn.BatchNorm1d(dim)
-    return nn.Identity()
-
-
 class DenoiserMLP(nn.Module):
     """
     MLP denoiser:

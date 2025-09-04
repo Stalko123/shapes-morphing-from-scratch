@@ -1,0 +1,251 @@
+import configargparse
+
+p = configargparse.ArgParser(
+    description="Training and evaluation config for DDPM denoisers (MLP/CNN/U-Net)."
+)
+
+# --------------------------------------------------------------------------------------
+# General / experiment
+# --------------------------------------------------------------------------------------
+p.add_argument(
+    '--t_max',
+    default=1000,
+    type=int,
+    help='Number of diffusion timesteps T (forward noising steps).'
+)
+p.add_argument(
+    '--n_epochs',
+    required=True,
+    type=int,
+    help='Number of training epochs (set 0 to run inference only).'
+)
+p.add_argument(
+    '--verbose',
+    action='store_true',
+    help='Enable verbose logging during training.'
+)
+
+# --------------------------------------------------------------------------------------
+# Data
+# --------------------------------------------------------------------------------------
+p.add_argument(
+    '--dataset',
+    default="CIFAR10",
+    choices=["CIFAR10", "MNIST", "CelebA", "STL10"],
+    type=str,
+    help='Dataset to use (torchvision).'
+)
+p.add_argument(
+    '--batch_size',
+    default=32,
+    type=int,
+    help='Batch size.'
+)
+p.add_argument(
+    '--n_workers',
+    default=4,
+    type=int,
+    help='Number of worker processes for the DataLoader.'
+)
+
+# --------------------------------------------------------------------------------------
+# Model selection (high level)
+# --------------------------------------------------------------------------------------
+p.add_argument(
+    '--model',
+    default="MLP",
+    choices=["MLP", "CNN", "U-Net"],
+    type=str,
+    help='Denoiser backbone.'
+)
+p.add_argument(
+    '--path_to_weights',
+    default=None,
+    type=str,
+    help='Path to pretrained denoiser weights (if loading).'
+)
+
+# --------------------------------------------------------------------------------------
+# Diffusion schedule / Monte Carlo
+# --------------------------------------------------------------------------------------
+p.add_argument(
+    '--num_trials',
+    default=100,
+    type=int,
+    help="Number of Monte Carlo samples used inside the loss (if applicable)."
+)
+p.add_argument(
+    '--alpha_min',
+    default=0.9,
+    type=float,
+    help="Minimum per-step α used to build the (linear) alpha schedule."
+)
+p.add_argument(
+    '--alpha_max',
+    default=1.0,
+    type=float,
+    help="Maximum per-step α used to build the (linear) alpha schedule."
+)
+p.add_argument(
+    '--alpha_interp',
+    default="linear",
+    choices=["linear", "cosine", "quadratic"],
+    type=str,
+    help="Interpolation used to generate the per-step α schedule over t (default: linear)."
+)
+
+# --------------------------------------------------------------------------------------
+# Training hyperparameters
+# --------------------------------------------------------------------------------------
+p.add_argument(
+    '--learning_rate',
+    default=1e-4,
+    type=float,
+    help='Learning rate.'
+)
+p.add_argument(
+    '--dropout',
+    default=0.0,
+    type=float,
+    help='Dropout probability used within the denoiser (applies to blocks that support it).'
+)
+p.add_argument(
+    '--optimizer',
+    default="Adam",
+    type=str,
+    help='Optimizer used for training'
+)
+
+# --------------------------------------------------------------------------------------
+# MLP-specific (ignored if model != MLP)
+# --------------------------------------------------------------------------------------
+p.add_argument(
+    '--hidden_sizes',
+    default=[1024, 1024],
+    type=int,
+    nargs='+',
+    help='Hidden layer sizes for the MLP denoiser (space-separated list).'
+)
+p.add_argument(
+    '--time_dim',
+    default=128,
+    type=int,
+    help='Time embedding dimension (MLP or CNN/U-Net time MLP output).'
+)
+p.add_argument(
+    '--activation',
+    default="silu",
+    choices=["silu", "relu", "gelu", "tanh"],
+    type=str,
+    help='Activation function.'
+)
+p.add_argument(
+    '--norm',
+    default="layer",
+    choices=["none", "layer", "batch", "batch2d", "group", "instance", "layer2d"],
+    type=str,
+    help='Normalization type: for MLP use {"none","layer","batch"}; for CNN/U-Net use the 2D variants.'
+)
+
+# --------------------------------------------------------------------------------------
+# U-Net / CNN-specific (ignored if model == MLP)
+# --------------------------------------------------------------------------------------
+p.add_argument(
+    '--init_scheme',
+    default="auto",
+    choices=["auto", "kaiming_uniform", "kaiming_normal", "xavier_uniform", "xavier_normal", "orthogonal"],
+    type=str,
+    help="Initialization scheme for model weights."
+)
+p.add_argument(
+    '--base_channels',
+    default=64,
+    type=int,
+    help="Base number of channels at the first U-Net/CNN stage."
+)
+p.add_argument(
+    '--channel_mults',
+    default=(1, 2, 4),
+    type=lambda s: tuple(map(int, s.split(","))),
+    help="Per-stage channel multipliers (comma-separated), e.g. '1,2,4'."
+)
+p.add_argument(
+    '--num_res_blocks',
+    default=2,
+    type=int,
+    help="Residual blocks per stage (int). For per-stage lists, handle in code or extend this arg."
+)
+p.add_argument(
+    '--num_res_blocks_in_bottleneck',
+    default=2,
+    type=int,
+    help="Number of residual blocks in the bottleneck stage."
+)
+p.add_argument(
+    '--kernel_size',
+    default=3,
+    type=int,
+    help="Convolution kernel size for main convs (odd values keep spatial size with same padding)."
+)
+p.add_argument(
+    '--downsample',
+    default="stride",
+    choices=["stride", "pool", "avgpool"],
+    type=str,
+    help="Downsampling method in encoder stages."
+)
+p.add_argument(
+    '--upsample',
+    default="nearest_conv",
+    choices=["convtranspose", "nearest_conv"],
+    type=str,
+    help="Upsampling method in decoder stages."
+)
+p.add_argument(
+    '--groups',
+    default=32,
+    type=int,
+    help="Number of groups for GroupNorm (CNN/U-Net)."
+)
+p.add_argument(
+    '--time_hidden',
+    default=512,
+    type=int,
+    help="Hidden size of the time embedding MLP (before projecting to --time_dim)."
+)
+
+# --------------------------------------------------------------------------------------
+# Logging / checkpoints / outputs
+# --------------------------------------------------------------------------------------
+p.add_argument(
+    '--log_dir',
+    default='./logs',
+    type=str,
+    help='Directory for TensorBoard logs.'
+)
+p.add_argument(
+    '--checkpoint_dir',
+    default='./checkpoints',
+    type=str,
+    help='Directory for model checkpoints.'
+)
+p.add_argument(
+    '--save_frequency',
+    default=10,
+    type=int,
+    help='Save a checkpoint every N epochs.'
+)
+p.add_argument(
+    '--output_dir',
+    default='./outputs',
+    type=str,
+    help='Directory for generated samples/visualizations.'
+)
+p.add_argument(
+    '--fps',
+    default=5,
+    type=int,
+    help='Frames per second for generated GIFs/videos.'
+)
+
+args_parsed = p.parse_args()
