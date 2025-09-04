@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import Sequence, Union, Tuple
-from timeembedder import sinusoidal_time_embed
+from DDPM.denoisers.timeembedder import sinusoidal_time_embed
 
 
 def _get_activation(name: str) -> nn.Module:
@@ -80,7 +80,8 @@ class DenoiserMLP(nn.Module):
         """
         B = x_t.size(0)
         x_flat = x_t.view(B, -1)
-        t_emb = sinusoidal_time_embed(t, self.time_dim)  # [B, time_dim]
+        #t_emb = sinusoidal_time_embed(t, self.time_dim)  # [B, time_dim]
+        t_emb = t.unsqueeze(1)
         input = torch.cat([x_flat, t_emb], dim=1)
         eps = self.net(input).view_as(x_t)
         return eps

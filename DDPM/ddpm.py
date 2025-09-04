@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple, Optional
-from ..utils.argparser import args
+# from ..utils.argparser import args
 import matplotlib.pyplot as plt
 import numpy as np
 import PIL
@@ -95,7 +95,7 @@ class DDPM:
         )
 
         if visualise:
-            visualiser= Visualiser(args, self)
+            visualiser= Visualiser(args)
             frames = [x_t]
 
         for t in reversed(range(self.t_max)):                
