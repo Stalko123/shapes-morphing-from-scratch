@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import Sequence, Union, Tuple
+import math
 from timeembedder import sinusoidal_time_embed
 
 
@@ -41,6 +42,8 @@ class DenoiserMLP(nn.Module):
         activation: str = "silu",
         norm: str = "layer",                        # 'none' | 'layer' | 'batch'
         dropout: Union[float, Sequence[float]] = 0.0,
+        init_scheme: str = "auto",
+        last_layer_zero: bool = True
     ):
         super().__init__()
         C, H, W = img_shape
@@ -48,6 +51,9 @@ class DenoiserMLP(nn.Module):
         in_img = C * H * W
         self.time_dim = time_dim
         input_dim = in_img + time_dim
+        self.init_scheme = (init_scheme or "auto").lower()
+        self.activation = activation
+        self.last_layer_zero = last_layer_zero
 
         # normalize dropout config
         if isinstance(dropout, (int, float)):
@@ -70,6 +76,82 @@ class DenoiserMLP(nn.Module):
 
         layers.append(nn.Linear(prev, in_img))
         self.net = nn.Sequential(*layers)
+
+
+    def _apply_init(self):
+        """
+        Initialize Linear/Norm layers according to self.init_scheme and self.activation_name.
+        - SiLU/GELU/ReLU -> Kaiming fan_in (relu gain) by default
+        - tanh -> Xavier
+        - lecun -> 1/fan_in (aka LeCun normal)
+        - orthogonal/normal supported explicitly
+        """
+        # map activation to a PyTorch nonlinearity string for gain
+        act = self.activation
+        if act in ("relu", "gelu", "silu", "swish"):
+            nonlin = "relu"
+        elif act == "tanh":
+            nonlin = "tanh"
+        else:
+            nonlin = "linear"
+
+        # gather linears to treat final layer specially
+        linear_layers = [m for m in self.net if isinstance(m, nn.Linear)]
+        last_linear = linear_layers[-1] if linear_layers else None
+
+        for m in self.net.modules():
+            if isinstance(m, nn.Linear):
+                if (self.last_layer_zero) and (m is last_linear):
+                    # zero last layer to start predicting near-zero noise
+                    nn.init.zeros_(m.weight)
+                    nn.init.zeros_(m.bias)
+                    continue
+
+                scheme = self.init_scheme
+
+                if scheme == "kaiming" or (scheme == "auto" and nonlin == "relu"):
+                    # fan_in to preserve forward activation variance for ReLU-like
+                    nn.init.kaiming_uniform_(m.weight, a=0.0, mode="fan_in", nonlinearity=nonlin)
+                    if m.bias is not None:
+                        # match PyTorch default bias init bound
+                        fan_in, _ = nn.init._calculate_fan_in_and_fan_out(m.weight)
+                        bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0.0
+                        nn.init.uniform_(m.bias, -bound, bound)
+
+                elif scheme == "xavier" or (scheme == "auto" and act == "tanh"):
+                    nn.init.xavier_uniform_(m.weight, gain=nn.init.calculate_gain(nonlin))
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
+
+                elif scheme == "lecun":
+                    nn.init.kaiming_normal_(m.weight, a=0.0, mode="fan_in", nonlinearity="linear")
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
+
+                elif scheme == "orthogonal":
+                    nn.init.orthogonal_(m.weight, gain=nn.init.calculate_gain(nonlin))
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
+
+                elif scheme == "normal":
+                    # small normal
+                    nn.init.normal_(m.weight, mean=0.0, std=0.02)
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
+
+                else:
+                    # fallback: kaiming
+                    nn.init.kaiming_uniform_(m.weight, a=0.0, mode="fan_in", nonlinearity=nonlin)
+                    if m.bias is not None:
+                        fan_in, _ = nn.init._calculate_fan_in_and_fan_out(m.weight)
+                        bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0.0
+                        nn.init.uniform_(m.bias, -bound, bound)
+
+            elif isinstance(m, (nn.LayerNorm, nn.BatchNorm1d)):
+                if hasattr(m, "weight") and m.weight is not None:
+                    nn.init.ones_(m.weight)
+                if hasattr(m, "bias") and m.bias is not None:
+                    nn.init.zeros_(m.bias)
 
 
     def forward(self, x_t: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
