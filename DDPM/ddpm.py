@@ -3,9 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple, Optional
 from ..utils.argparser import args
-import matplotlib.pyplot as plt
-import numpy as np
-import PIL
 from ..visualiser import Visualiser
 
 
@@ -23,7 +20,6 @@ class DDPM:
         self.alphas_bar: torch.Tensor = DDPM.compute_alphas_bar(self.alphas)
         self.num_trials: int = args.num_trials
         self.t_max: int = args.t_max
-
 
 
     @staticmethod
@@ -95,7 +91,7 @@ class DDPM:
         )
 
         if visualise:
-            visualiser= Visualiser(args, self)
+            visualiser = Visualiser(args, self)
             frames = [x_t]
 
         for t in reversed(range(self.t_max)):                
