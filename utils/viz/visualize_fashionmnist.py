@@ -15,7 +15,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from DDPM.ddpm import DDPM
 from DDPM.denoisers.denoisermlp import DenoiserMLP
-from dataloader import Dataloader
+from loaders.dataloader import Dataloader
 
 
 def load_model(checkpoint_path):

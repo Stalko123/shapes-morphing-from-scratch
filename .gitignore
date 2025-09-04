@@ -5,3 +5,5 @@ tests
 .cursor
 checkpoints
 logs
+test_dataloader.ipynb
+test_visualiser.ipynb
