@@ -8,4 +8,5 @@ logs
 *.ipynb
 *.png
 .output
-.output
+outputs
+.venv
