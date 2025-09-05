@@ -1,7 +1,7 @@
-# shapes-morphing-from-scratch
-This repository explores the use of diffusion models for smoothly morphing one shape into another. Instead of relying on traditional interpolation techniques, we leverage generative diffusion processes to learn continuous transitions between source and target geometries.
+# Shapes morphing from scratch
+This repository explores the implementation of diffusion models with an application for the smooth morphing one shape to another.
 
-# Installation
+## Installation
 
 This project requires **Python3.12**.
 We recommend using a virtual environment to keep dependencies isolated.
@@ -50,21 +50,16 @@ chmod +x ./*.sh
 ./scripts/demoscripttodo.sh
 ```
 
+## References: 
 
+- [Denoising Diffusion Probabilistic Models](https://arxiv.org/pdf/2006.11239)
 
+- [Flow matching for generative modeling](https://arxiv.org/pdf/2210.02747)
 
+- [Diffusion Schrödinger Bridge with Applications to Score-Based Generative Modeling](https://arxiv.org/abs/2106.01357)
 
+- [Deep Unsupervised Learning using Nonequilibrium Thermodynamics](https://arxiv.org/abs/1503.03585)
 
-
-
-# References: 
-1- Denoising Diffusion Probabilistic Models: https://arxiv.org/pdf/2006.11239
-
-2- Flow matching for generative modeling : https://arxiv.org/pdf/2210.02747
-
-3- Diffusion Schrödinger Bridge with Applications to Score-Based Generative Modeling : https://arxiv.org/abs/2106.01357
-
-4- Deep Unsupervised Learning using Nonequilibrium Thermodynamics : https://arxiv.org/abs/1503.03585
 
 
 
