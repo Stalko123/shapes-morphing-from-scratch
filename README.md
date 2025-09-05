@@ -12,20 +12,20 @@ git clone https://github.com/Stalko123/shapes-morphing-from-scratch.git
 cd shapes-morphing-from-scratch
 ```
 ### 2. Create virtual environment
-On Linux/macOS:
+- On Linux/macOS:
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip setuptools wheel
 ```
-On Windows:
+- On Windows:
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -U pip setuptools wheel
 ```
-If you do not have Python3.12 installed on your device, you may want to install it.
-On Linux/macOS:
+If you do not have Python3.12 installed on your device, you may want to install it.  
+- On Linux/macOS:
 ```bash
 curl https://pyenv.run | bash
 echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
@@ -35,8 +35,8 @@ exec $SHELL -l
 pyenv install 3.12.9
 pyenv local 3.12.9
 ```
-Now you can run the Python3.12.9 installation command.
-On Windows:
+Now you can run the Python3.12.9 installation command.  
+- On Windows:  
 Install Python 3.12 from the Microsoft Store or python.org, then use the commands above.
 
 ### 3. Install dependencies
@@ -65,6 +65,7 @@ chmod +x ./*.sh
 3- Diffusion Schrödinger Bridge with Applications to Score-Based Generative Modeling : https://arxiv.org/abs/2106.01357
 
 4- Deep Unsupervised Learning using Nonequilibrium Thermodynamics : https://arxiv.org/abs/1503.03585
+
 
 
 
