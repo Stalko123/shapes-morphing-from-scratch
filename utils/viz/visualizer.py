@@ -1,10 +1,7 @@
-import matplotlib.pyplot as plt
-import PIL
 import numpy as np
-import torch
 from PIL import Image
 
-class Visualiser : 
+class Visualizer : 
 
     def __init__(self, args):
 
@@ -34,26 +31,22 @@ class Visualiser :
         
         for frame in frames:
 
-            frame_np = frame.cpu().numpy()
+            frame_np = frame.detach().cpu().numpy()  # Use detach() to remove gradients
             
             if is_grayscale:  
-                # Remove channel dimension and convert to uint8
+                # Remove channel dimension and keep values in [0, 1] range
                 frame_np = frame_np.squeeze(0)
-                # Ensure values are in range [0, 255]
-                if frame_np.max() <= 1.0:
-                    frame_np = (frame_np * 255).astype('uint8')
-                else:
-                    frame_np = frame_np.astype('uint8')
+                # Clip values to [0, 1] range and convert to uint8 [0, 255] for PIL
+                frame_np = np.clip(frame_np, 0, 1)
+                frame_np = (frame_np * 255).astype('uint8')
                 pil_frame = Image.fromarray(frame_np, mode='L')
                 
             else:
                 # Transpose from [C, H, W] to [H, W, C]
                 frame_np = frame_np.transpose(1, 2, 0)
-                # Ensure values are in range [0, 255]
-                if frame_np.max() <= 1.0:
-                    frame_np = (frame_np * 255).astype('uint8')
-                else:
-                    frame_np = frame_np.astype('uint8')
+                # Clip values to [0, 1] range and convert to uint8 [0, 255] for PIL
+                frame_np = np.clip(frame_np, 0, 1)
+                frame_np = (frame_np * 255).astype('uint8')
                 pil_frame = Image.fromarray(frame_np, mode='RGB')
             
             pil_frames.append(pil_frame)
