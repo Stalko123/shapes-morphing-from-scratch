@@ -102,7 +102,7 @@ class Args:
                 self.num_res_blocks,
                 self.upsample,
                 self.norm,
-                self.groups,  # <- was args.group; using the parsed 'groups'
+                self.groups,
                 self.num_res_blocks_in_bottleneck,
                 self.kernel_size,
                 self.downsample,
