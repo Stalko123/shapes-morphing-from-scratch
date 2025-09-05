@@ -163,5 +163,5 @@ class TimeEmbed(nn.Module):
         )
 
     def forward(self, t: torch.Tensor) -> torch.Tensor:
-        base = sinusoidal_time_embed(t, self.mlp[1].in_features)  # time_dim_in
+        base = sinusoidal_time_embed(t, self.mlp[0].in_features)  # time_dim_in
         return self.mlp(base)  # [B, time_dim_out]

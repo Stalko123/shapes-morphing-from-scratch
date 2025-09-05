@@ -56,6 +56,10 @@ class Args:
         self.activation: str = args_parsed.activation
         self.norm: str = args_parsed.norm
         self.init_scheme: str = args_parsed.init_scheme
+
+        # ---------------------------
+        # MLP-specific
+        # ---------------------------
         self.hidden_sizes = args_parsed.hidden_sizes
 
         # ---------------------------
@@ -108,7 +112,7 @@ class Args:
                 self.dropout,
                 self.init_scheme
             )
-        elif args_parsed.model.lower() == "unet":
+        elif args_parsed.model.lower() == "unet" or args_parsed.model.lower() == "u-net":
             self.model = DenoiserUNet(
                 self.dataset.image_shape,
                 self.base_channels,
