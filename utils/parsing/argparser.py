@@ -218,6 +218,12 @@ p.add_argument(
 # Logging / checkpoints / outputs
 # --------------------------------------------------------------------------------------
 p.add_argument(
+    '--exp_name',
+    default='default_experiment',
+    type=str,
+    help='Experiment name for organizing logs and checkpoints.'
+)
+p.add_argument(
     '--log_dir',
     default='./logs',
     type=str,

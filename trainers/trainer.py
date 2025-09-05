@@ -7,7 +7,7 @@ import sys
 import numpy as np
 
 # Add the project root to the path for imports
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from loaders.dataloader import Dataloader
 from DDPM.ddpm import DDPM

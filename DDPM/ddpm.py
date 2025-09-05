@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple, Optional
-from ..utils.parsing.args import args
-from ..utils.viz.visualizer import Visualizer
+from utils.parsing.args import args
+from utils.viz.visualizer import Visualizer
 
 
 class DDPM:
@@ -39,7 +39,7 @@ class DDPM:
         device = x.device
         t_tensor = t_tensor.to(device=device, dtype=torch.long)
 
-        alpha_bar_t = self.alphas_bar.index_select(0, t_tensor)
+        alpha_bar_t = self.alphas_bar.to(device).index_select(0, t_tensor)
         alpha_bar_t = alpha_bar_t.view(-1, *([1] * (x.ndim - 1)))
 
         white_noise = torch.randn_like(x)

@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 from typing import Sequence, Tuple, Union, Literal
 from utils.model_utils import TimeEmbed, get_activation, get_norm2d, conv3x3
-from resblock import ResBlock
-from downsample import Downsample
-from upsample import Upsample
+from .resblock import ResBlock
+from .downsample import Downsample
+from .upsample import Upsample
 
 
 class DenoiserUNet(nn.Module):
