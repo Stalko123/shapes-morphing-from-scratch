@@ -7,3 +7,5 @@ checkpoints
 logs
 test_dataloader.ipynb
 test_visualiser.ipynb
+*.ipynb
+*.png
