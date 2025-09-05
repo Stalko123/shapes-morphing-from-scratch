@@ -7,3 +7,4 @@ checkpoints
 logs
 *.ipynb
 *.png
+.output
