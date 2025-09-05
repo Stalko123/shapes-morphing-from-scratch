@@ -3,7 +3,7 @@ This repository explores the implementation of diffusion models with an applicat
 
 ## Installation
 
-This project requires **Python3.12**.
+This project requires **Python 3.12**.
 We recommend using a virtual environment to keep dependencies isolated.
 
 ### 1. Clone the repository
@@ -35,7 +35,7 @@ exec $SHELL -l
 pyenv install 3.12.9
 pyenv local 3.12.9
 ```
-Now you can run the Python3.12.9 installation command.  
+Now you can run the Python 3.12.9 installation command.  
 - On Windows:  
 Install Python 3.12 from the Microsoft Store or python.org, then use the commands above.
 
@@ -59,6 +59,7 @@ find ./scripts/ -type f -name "*.sh" -exec chmod +x {} \;
 - [Diffusion Schrödinger Bridge with Applications to Score-Based Generative Modeling](https://arxiv.org/abs/2106.01357)
 
 - [Deep Unsupervised Learning using Nonequilibrium Thermodynamics](https://arxiv.org/abs/1503.03585)
+
 
 
 
