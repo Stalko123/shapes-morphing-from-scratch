@@ -4,6 +4,7 @@
 # Run with: bash train.sh
 
 python trainers/trainer.py \
+    --exp_name "mnist_mlp_experiment" \
     --n_epochs 100 \
     --batch_size 10 \
     --learning_rate 1e-4 \
@@ -19,7 +20,7 @@ python trainers/trainer.py \
     --dropout 0.2 \
     --n_workers 4 \
     --log_dir "./logs" \
-    --checkpoint_dir "./checkpoints/MLP" \
+    --checkpoint_dir "./checkpoints" \
     --save_frequency 10 \
     --verbose \
     --fps 5 \

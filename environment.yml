@@ -182,6 +182,7 @@ dependencies:
   - python-tzdata=2025.2=pyhd3eb1b0_0
   - pytorch=2.5.1=gpu_cuda124_py312hfee4293_304
   - pytz=2025.2=py312h06a4308_0
+  - pyyaml=6.0.2=py312h5eee18b_0
   - re2=2024.07.02=hdb19cb5_0
   - readline=8.3=hc2a1206_0
   - requests=2.32.5=py312h06a4308_0
@@ -220,6 +221,7 @@ dependencies:
   - xorg-libxrender=0.9.12=h9b100fa_0
   - xorg-xorgproto=2024.1=h5eee18b_1
   - xz=5.6.4=h5eee18b_1
+  - yaml=0.2.5=h7b6447c_0
   - zipp=3.21.0=py312h06a4308_0
   - zlib=1.2.13=h5eee18b_1
   - zstd=1.5.6=hc292b87_0
