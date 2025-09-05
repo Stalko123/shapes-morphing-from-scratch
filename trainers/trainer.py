@@ -1,10 +1,9 @@
 import torch
-import torch.nn as nn
-import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 import os
 import sys
 import numpy as np
+from tqdm import tqdm
 
 # Add the project root to the path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -86,10 +85,10 @@ class Trainer:
                 self.writer.add_scalar('Loss/Train_Step', loss, self.global_step)
                 
                 # Verbose logging
-                if getattr(self.args, 'verbose', False) and batch_idx % 100 == 0:
-                    print(f'Epoch: {epoch+1}/{self.n_epochs}, '
-                          f'Batch: {batch_idx}/{len(self.dataloader.dataloader)}, '
-                          f'Loss: {loss:.6f}')
+                # if getattr(self.args, 'verbose', False) and batch_idx % 100 == 0:
+                #     print(f'Epoch: {epoch+1}/{self.n_epochs}, '
+                #           f'Batch: {batch_idx}/{len(self.dataloader.dataloader)}, '
+                #           f'Loss: {loss:.6f}')
                 
                 self.global_step += 1
             
