@@ -7,8 +7,8 @@ from tqdm import tqdm
 
 # Add the project root to the path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Comment bapt : maybe avoid this for final version
 
-from loaders.dataloader import Dataloader
 from DDPM.ddpm import DDPM
 from DDPM.denoisers.denoisermlp.denoisermlp import DenoiserMLP
 
@@ -72,36 +72,40 @@ class Trainer:
         Main training loop.
         """
         self.denoiser.train()
-        
+
         for epoch in range(self.n_epochs):
             epoch_losses = []
+
+            # create tqdm progress bar for the batches
+            pbar = tqdm(self.dataloader.dataloader, desc=f"Epoch {epoch+1}/{self.n_epochs}")
             
-            for batch_idx, (data, _) in enumerate(self.dataloader.dataloader):
+            for batch_idx, (data, _) in enumerate(pbar):
                 # Training step
                 loss = self.train_step(data)
                 epoch_losses.append(loss)
-                
+
                 # Log to tensorboard
                 self.writer.add_scalar('Loss/Train_Step', loss, self.global_step)
-                
-                # Verbose logging
-                # if getattr(self.args, 'verbose', False) and batch_idx % 100 == 0:
-                #     print(f'Epoch: {epoch+1}/{self.n_epochs}, '
-                #           f'Batch: {batch_idx}/{len(self.dataloader.dataloader)}, '
-                #           f'Loss: {loss:.6f}')
-                
+
+                # Verbose logging 
+                # if getattr(self.args, 'verbose', False) and batch_idx % 100 == 0: 
+                #   print(f'Epoch: {epoch+1}/{self.n_epochs}, Batch: {batch_idx}/{len(self.dataloader.dataloader)}, Loss: {loss:.6f}')
+
+                # update tqdm bar with current loss
+                pbar.set_postfix(loss=f"{loss:.6f}")
+
                 self.global_step += 1
-            
+
             # Log epoch statistics
             avg_loss = np.mean(epoch_losses)
             self.writer.add_scalar('Loss/Train_Epoch', avg_loss, epoch)
-            
-            print(f'Epoch {epoch+1}/{self.n_epochs} completed. Average Loss: {avg_loss:.6f}')
-            
+
+            print(f"Epoch {epoch+1}/{self.n_epochs} completed. Average Loss: {avg_loss:.6f}")
+
             # Save checkpoint
             if (epoch + 1) % getattr(self.args, 'save_frequency', 10) == 0:
                 self.save_checkpoint(epoch + 1)
-        
+
         # Save final model
         self.save_checkpoint(self.n_epochs, final=True)
         self.writer.close()

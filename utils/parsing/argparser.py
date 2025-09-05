@@ -54,7 +54,6 @@ p.add_argument(
 p.add_argument(
     '--model',
     default="MLP",
-    choices=["MLP", "CNN", "U-Net"],
     type=str,
     help='Denoiser backbone.'
 )
@@ -121,10 +120,9 @@ p.add_argument(
 # --------------------------------------------------------------------------------------
 p.add_argument(
     '--hidden_sizes',
-    default=[1024, 1024],
-    type=int,
-    nargs='+',
-    help='Hidden layer sizes for the MLP denoiser (space-separated list).'
+    default=(2048, 1024),
+    type=lambda s: tuple(map(int, s.split(","))),
+    help="Width of the MLP's hidden layers (comma-separated), e.g. '1,2,4'."
 )
 p.add_argument(
     '--time_dim',
