@@ -46,7 +46,7 @@ pip install -r requirements.txt
 
 ### 4. Run demo script
 ```bash
-chmod +x ./*.sh
+find ./scripts/ -type f -name "*.sh" -exec chmod +x {} \;
 ./scripts/demoscripttodo.sh
 ```
 
@@ -59,6 +59,7 @@ chmod +x ./*.sh
 - [Diffusion Schrödinger Bridge with Applications to Score-Based Generative Modeling](https://arxiv.org/abs/2106.01357)
 
 - [Deep Unsupervised Learning using Nonequilibrium Thermodynamics](https://arxiv.org/abs/1503.03585)
+
 
 
 
