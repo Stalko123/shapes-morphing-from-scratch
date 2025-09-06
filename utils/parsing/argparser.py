@@ -53,7 +53,7 @@ p.add_argument(
 # --------------------------------------------------------------------------------------
 p.add_argument(
     '--model',
-    default="MLP",
+    required=True,
     type=str,
     help='Denoiser backbone.'
 )
@@ -125,22 +125,9 @@ p.add_argument(
     help="Width of the MLP's hidden layers (comma-separated), e.g. '1,2,4'."
 )
 p.add_argument(
-    '--time_dim',
-    default=128,
-    type=int,
-    help='Time embedding dimension (MLP or CNN/U-Net time MLP output).'
-)
-p.add_argument(
-    '--activation',
-    default="silu",
-    choices=["silu", "relu", "gelu", "tanh"],
-    type=str,
-    help='Activation function.'
-)
-p.add_argument(
-    '--norm',
+    '--norm_1d',
     default="layer",
-    choices=["none", "layer", "batch", "batch2d", "group", "instance", "layer2d"],
+    choices=["none", "layer", "batch"],
     type=str,
     help='Normalization type: for MLP use {"none","layer","batch"}; for CNN/U-Net use the 2D variants.'
 )
@@ -180,12 +167,6 @@ p.add_argument(
     help="Number of residual blocks in the bottleneck stage."
 )
 p.add_argument(
-    '--kernel_size',
-    default=3,
-    type=int,
-    help="Convolution kernel size for main convs (odd values keep spatial size with same padding)."
-)
-p.add_argument(
     '--downsample',
     default="stride",
     choices=["stride", "pool", "avgpool"],
@@ -206,10 +187,52 @@ p.add_argument(
     help="Number of groups for GroupNorm (CNN/U-Net)."
 )
 p.add_argument(
+    '--norm_2d',
+    default="group",
+    choices=["none","batch2d","group","instance","layer2d"],
+    type=str,
+    help="Normalization type: for CNN/U-Net use {'none','batch2d','group','instance','layer2d'}; for MLP use the 1D variants."
+)
+p.add_argument(
+    '--stem_kernel',
+    default=5,
+    type=int,
+    help="Convolution kernel size of the first hidden-layer."
+)
+p.add_argument(
+    '--head_kernel',
+    default=5,
+    type=int,
+    help="Convolution kernel size of the last hidden-layer."
+)
+
+# --------------------------------------------------------------------------------------
+# Shared knobs
+# --------------------------------------------------------------------------------------
+p.add_argument(
+    '--activation',
+    default="silu",
+    choices=["silu", "relu", "gelu", "tanh"],
+    type=str,
+    help='Activation function.'
+)
+p.add_argument(
+    '--time_base_dim',
+    default=128,
+    type=int,
+    help='Dimension of the time embedding'
+)
+p.add_argument(
     '--time_hidden',
     default=512,
     type=int,
-    help="Hidden size of the time embedding MLP (before projecting to --time_dim)."
+    help='Hidden dimension of the time embedder MLP'
+)
+p.add_argument(
+    '--time_output_dim',
+    default=256,
+    type=int,
+    help='Output dimension of the time embedder MLP'
 )
 
 # --------------------------------------------------------------------------------------

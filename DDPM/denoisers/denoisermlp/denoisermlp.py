@@ -2,134 +2,140 @@ import torch
 import torch.nn as nn
 from typing import Sequence, Union, Tuple, Literal
 import math
-from utils.model_utils import sinusoidal_time_embed, get_activation, get_norm1d
+from utils.model_utils import get_activation, get_norm1d, TimeEmbed, init
+
+
+class FiLM(nn.Module):
+    """
+    Feature-wise Linear Modulation: for a hidden vector h (B, D) and a cond vector c (B, C),
+    produce gamma, beta in (B, D) and return gamma * h + beta. We parameterize:
+        [gamma_delta, beta] = Linear(c) -> (B, 2D)
+        gamma = 1 + gamma_delta            
+    """
+    def __init__(self, cond_dim: int, hidden_dim: int):
+        super().__init__()
+        self.to_gamma_beta = nn.Linear(cond_dim, 2 * hidden_dim)
+        nn.init.zeros_(self.to_gamma_beta.weight)
+        nn.init.zeros_(self.to_gamma_beta.bias)
+
+    def forward(self, h: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
+        gb = self.to_gamma_beta(cond)                 # (B, 2D)
+        gamma_delta, beta = gb.chunk(2, dim=-1)       # (B, D), (B, D)
+        gamma = 1.0 + gamma_delta
+        return gamma * h + beta
 
 
 class DenoiserMLP(nn.Module):
     """
-    MLP denoiser:
-      - Flattens image, concats sinusoidal time embedding
-      - Block order: Linear -> Norm -> Activation -> Dropout (per hidden layer)
-      - Predicts noise
+    MLP denoiser with FiLM conditioning by time embedding:
+      - Flatten image
+      - Per hidden layer: Linear -> Norm -> FiLM(time) -> Activation -> (Dropout)
+      - Final Linear predicts noise, reshaped to image
     """
     def __init__(
         self,
-        img_shape: Tuple[int, int, int],                                    # (C, H, W) : image shape
-        hidden_sizes: Sequence[int],                                        # widths of the hidden layers
-        time_dim: int = 128,                                                # dimension of time embedding
-        activation: Literal["silu", "relu", "gelu", "tanh"] = "silu",       # activation function
-        norm: Literal["none", "layer", "batch"] = "layer",                  # 'none' | 'layer' | 'batch'
-        dropout: Union[float, Sequence[float]] = 0.0,                       # dropout layers
-        init_scheme: str = "auto",                                          # initialization scheme
+        img_shape: Tuple[int, int, int],                          # (C, H, W)
+        hidden_sizes: Sequence[int],                              # widths of hidden layers
+        time_base_dim: int = 128,                                 # sinusoidal input dim
+        time_output_dim: int = 256,                               # time embedding output dim
+        time_hidden: int = 512,                                   # time MLP hidden
+        activation: Literal["silu", "relu", "gelu", "tanh"] = "silu",
+        norm: Literal["none", "layer", "batch"] = "layer",
+        dropout: Union[float, Sequence[float]] = 0.0,
+        init_scheme: str = "auto",
     ):
         super().__init__()
         C, H, W = img_shape
         self.img_shape = img_shape
         in_img = C * H * W
-        self.time_dim = time_dim
-        input_dim = in_img + time_dim
+
         self.init_scheme = (init_scheme or "auto").lower()
-        self.activation = activation
+        self.activation_name = activation
+
+        # Time embedding network
+        self.time_embed = TimeEmbed(
+            time_dim_in=time_base_dim,
+            time_dim_out=time_output_dim,
+            hidden=time_hidden,
+        )
+        self.cond_dim = time_output_dim
 
         # normalize dropout config
         if isinstance(dropout, (int, float)):
             dropouts = [float(dropout)] * len(hidden_sizes)
         else:
             dropouts = list(dropout)
-            assert len(dropouts) == len(hidden_sizes), f"DenoiserMLP error : dropout list must match hidden_sizes ({len(hidden_sizes)}), got {len(dropouts)}"
+            assert len(dropouts) == len(hidden_sizes), \
+                f"dropout list must match hidden_sizes ({len(hidden_sizes)}), got {len(dropouts)}"
 
         act = get_activation(activation)
 
-        layers = []
-        prev = input_dim
-        for i, width in enumerate(hidden_sizes):
-            layers.append(nn.Linear(prev, width))
-            layers.append(get_norm1d(norm, width))
-            layers.append(act.__class__())
-            if dropouts[i] > 0:
-                layers.append(nn.Dropout(dropouts[i]))
-            prev = width
+        self.in_proj = nn.Linear(in_img, hidden_sizes[0]) if hidden_sizes else nn.Identity()
+        self.in_norm = get_norm1d(norm, hidden_sizes[0]) if hidden_sizes else nn.Identity()
+        self.in_film = FiLM(self.cond_dim, hidden_sizes[0]) if hidden_sizes else nn.Identity()
+        self.in_act = act.__class__() if hidden_sizes else nn.Identity()
+        self.in_drop = nn.Dropout(dropouts[0]) if hidden_sizes and dropouts[0] > 0 else nn.Identity()
 
-        layers.append(nn.Linear(prev, in_img))
-        self.net = nn.Sequential(*layers)
+        blocks = []
+        films  = []
+        norms  = []
+        acts   = []
+        drops  = []
+
+        for i in range(1, len(hidden_sizes)):
+            in_d, out_d = hidden_sizes[i-1], hidden_sizes[i]
+            blocks.append(nn.Linear(in_d, out_d))
+            norms.append(get_norm1d(norm, out_d))
+            films.append(FiLM(self.cond_dim, out_d))
+            acts.append(act.__class__())
+            drops.append(nn.Dropout(dropouts[i]) if dropouts[i] > 0 else nn.Identity())
+
+        self.blocks = nn.ModuleList(blocks)
+        self.norms  = nn.ModuleList(norms)
+        self.films  = nn.ModuleList(films)
+        self.acts   = nn.ModuleList(acts)
+        self.drops  = nn.ModuleList(drops)
+
+        # Output head
+        last_width = hidden_sizes[-1] if hidden_sizes else in_img
+        self.out_proj = nn.Linear(last_width, in_img)
+
+        self._apply_init()
 
 
     def _apply_init(self):
-        """
-        Initialize Linear/Norm layers according to self.init_scheme and self.activation_name.
-        - SiLU/GELU/ReLU -> Kaiming fan_in (relu gain) by default
-        - tanh -> Xavier
-        - lecun -> 1/fan_in (aka LeCun normal)
-        - orthogonal/normal supported explicitly
-        """
-        # map activation to a PyTorch nonlinearity string for gain
-        act = self.activation
-        if act in ("relu", "gelu", "silu", "swish"):
-            nonlin = "relu"
-        elif act == "tanh":
-            nonlin = "tanh"
-        else:
-            nonlin = "linear"
-
-        for m in self.net.modules():
-            if isinstance(m, nn.Linear):
-
-                scheme = self.init_scheme
-
-                if scheme == "kaiming" or (scheme == "auto" and nonlin == "relu"):
-                    # fan_in to preserve forward activation variance for ReLU-like
-                    nn.init.kaiming_uniform_(m.weight, a=0.0, mode="fan_in", nonlinearity=nonlin)
-                    if m.bias is not None:
-                        # match PyTorch default bias init bound
-                        fan_in, _ = nn.init._calculate_fan_in_and_fan_out(m.weight)
-                        bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0.0
-                        nn.init.uniform_(m.bias, -bound, bound)
-
-                elif scheme == "xavier" or (scheme == "auto" and act == "tanh"):
-                    nn.init.xavier_uniform_(m.weight, gain=nn.init.calculate_gain(nonlin))
-                    if m.bias is not None:
-                        nn.init.zeros_(m.bias)
-
-                elif scheme == "lecun":
-                    nn.init.kaiming_normal_(m.weight, a=0.0, mode="fan_in", nonlinearity="linear")
-                    if m.bias is not None:
-                        nn.init.zeros_(m.bias)
-
-                elif scheme == "orthogonal":
-                    nn.init.orthogonal_(m.weight, gain=nn.init.calculate_gain(nonlin))
-                    if m.bias is not None:
-                        nn.init.zeros_(m.bias)
-
-                elif scheme == "normal":
-                    # small normal
-                    nn.init.normal_(m.weight, mean=0.0, std=0.02)
-                    if m.bias is not None:
-                        nn.init.zeros_(m.bias)
-
-                else:
-                    # fallback: kaiming
-                    nn.init.kaiming_uniform_(m.weight, a=0.0, mode="fan_in", nonlinearity=nonlin)
-                    if m.bias is not None:
-                        fan_in, _ = nn.init._calculate_fan_in_and_fan_out(m.weight)
-                        bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0.0
-                        nn.init.uniform_(m.bias, -bound, bound)
-
-            elif isinstance(m, (nn.LayerNorm, nn.BatchNorm1d)):
-                if hasattr(m, "weight") and m.weight is not None:
-                    nn.init.ones_(m.weight)
-                if hasattr(m, "bias") and m.bias is not None:
-                    nn.init.zeros_(m.bias)
+        act = self.activation_name
+        nonlin = "relu" if act in ("relu", "gelu", "silu", "swish") else ("tanh" if act == "tanh" else "linear")
+        for m in self.modules():
+            init(m, self.init_scheme, nonlin)
 
 
     def forward(self, x_t: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
         x_t: [B, C, H, W]
-        t:   [B] (long)
-        returns ε_pred with same shape as x_t
+        t:   [B] (int/long or float)
+        returns ε_pred with shape [B, C, H, W]
         """
         B = x_t.size(0)
-        x_flat = x_t.view(B, -1)
-        t_emb = sinusoidal_time_embed(t, self.time_dim)  # [B, time_dim]
-        input = torch.cat([x_flat, t_emb], dim=1)
-        eps = self.net(input).view_as(x_t)
+        x = x_t.view(B, -1)
+
+        t_emb = self.time_embed(t)
+
+        if isinstance(self.in_proj, nn.Identity):
+            h = x
+        else:
+            h = self.in_proj(x)
+            h = self.in_norm(h)
+            h = self.in_film(h, t_emb)
+            h = self.in_act(h)
+            h = self.in_drop(h)
+
+        for lin, norm, film, act, drop in zip(self.blocks, self.norms, self.films, self.acts, self.drops):
+            h = lin(h)
+            h = norm(h)
+            h = film(h, t_emb)
+            h = act(h)
+            h = drop(h)
+
+        eps = self.out_proj(h).view_as(x_t)
         return eps

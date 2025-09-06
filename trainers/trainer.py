@@ -120,7 +120,7 @@ class Trainer:
             'model_state_dict': self.denoiser.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'args': self.args,
-            'img_shape': self.args.dataset.img_shape
+            'img_shape': self.args.dataset.image_shape
         }
         
         if final:
