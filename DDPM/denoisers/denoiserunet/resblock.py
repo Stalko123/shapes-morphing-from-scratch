@@ -24,7 +24,7 @@ class ResBlock(nn.Module):
         super().__init__()
         self.act = get_activation(activation)
         self.norm1 = get_norm2d(norm, in_ch, groups)
-        self.conv1 = conv3x3(in_ch, out_ch, k=kernel_size, stride=1)
+        self.conv1 = conv3x3(in_ch, out_ch)
 
         self.use_time = time_dim > 0
         if self.use_time:
@@ -35,7 +35,7 @@ class ResBlock(nn.Module):
 
         self.norm2 = get_norm2d(norm, out_ch, groups)
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
-        self.conv2 = conv3x3(out_ch, out_ch, k=kernel_size, stride=1)
+        self.conv2 = conv3x3(out_ch, out_ch)
 
         # zero-init second conv (helps diffusion training)
         nn.init.zeros_(self.conv2.weight)

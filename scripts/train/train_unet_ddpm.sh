@@ -5,7 +5,7 @@
 
 python trainers/trainer.py \
     --t_max 1000 \
-    --n_epochs 100 \
+    --n_epochs 1 \
     --verbose \
     --model "u-net" \
     --dataset "MNIST" \
@@ -18,9 +18,8 @@ python trainers/trainer.py \
     --learning_rate 1e-3 \
     --dropout 0.2 \
     --optimizer "adam" \
-    --time_dim 128 \
     --activation "silu" \
-    --norm "group" \
+    --norm_2d "group" \
     --init_scheme "auto" \
     --base_channels 64 \
     --channel_mults 1,2,2 \
@@ -28,12 +27,15 @@ python trainers/trainer.py \
     --upsample "nearest_conv" \
     --groups 32 \
     --num_res_blocks_in_bottleneck 2 \
-    --kernel_size 3 \
+    --stem_kernel 5 \
+    --head_kernel 5 \
     --downsample "stride" \
-    --time_hidden 256 \
+    --time_base_dim 128 \
+    --time_hidden 512 \
+    --time_output_dim 256 \
     --exp_name "mnist_u-net_experiment" \
     --log_dir "./logs" \
     --checkpoint_dir "./checkpoints" \
-    --save_frequency 100 \
+    --save_frequency 1 \
     --output_dir "./outputs" \
     --fps 5
