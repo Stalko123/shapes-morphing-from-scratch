@@ -10,8 +10,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Comment bapt : maybe avoid this for final version
 
 from DDPM.ddpm import DDPM
-from DDPM.denoisers.denoisermlp.denoisermlp import DenoiserMLP
-
 
 class Trainer:
     """

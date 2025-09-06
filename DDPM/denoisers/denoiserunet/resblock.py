@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from utils.model_utils import get_activation, get_norm2d, conv3x3
+from utils.model_utils.getters import get_activation, get_norm2d, conv3x3
 from typing import Literal
 
 

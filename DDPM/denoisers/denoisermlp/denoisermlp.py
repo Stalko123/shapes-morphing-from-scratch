@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 from typing import Sequence, Union, Tuple, Literal
-import math
-from utils.model_utils import get_activation, get_norm1d, TimeEmbed, init
+from utils.model_utils.getters import get_activation, get_norm1d
+from utils.model_utils.init_utils import init
+from utils.model_utils.time_embedding import TimeEmbed
 
 
 class FiLM(nn.Module):
