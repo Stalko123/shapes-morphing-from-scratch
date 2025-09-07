@@ -1,35 +1,99 @@
-import torchvision.datasets
+from typing import Optional
 from torch.utils.data import DataLoader
-from torchvision.transforms import ToTensor
+from loaders.helpers import make_transforms_pair, ADAPTERS, _adapter_generic, _first_batch_shape
 
-class Dataloader:
+class Loader:
+    """
+    A modular dataloader that normalizes split names and adapts to many torchvision datasets.
+    """
+    def __init__(
+        self,
+        name: str,
+        batch_size: int,
+        num_workers: int = 4,
+        split: str = "train",                 # "train" | "train+val" | "test"
+        val_ratio: float = 0.05,
+        seed: int = 42,
+        normalize_to_neg1: bool = True,
+        apply_aug: bool = True,
+        img_size: Optional[int] = None,       # optional resize
+        rgb: Optional[bool] = None,           # if None, we guess from name
+        shuffle: Optional[bool] = None,       # if None, True for train, False otherwise
+        drop_last: Optional[bool] = True,
+        pin_memory: bool = True,
+        persistent_workers: Optional[bool] = None,
+        download: bool = True,
+        **dataset_kwargs,                      # extra args forwarded when supported
+    ):
+        self.name = name
+        self.root = f"../data/{name}"
+        self.split = split
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.pin_memory = pin_memory
+        self.normalize_to_neg1 = normalize_to_neg1
+        self.apply_aug = apply_aug
 
-    def __init__(self, name, batch_size, n_workers, n_epochs):
+        if persistent_workers is None:
+            persistent_workers = (num_workers > 0)
 
-        self.name_dataset = name.upper()
-        self.batch_size = batch_size 
-        self.n_workers = n_workers
-        self.train = n_epochs > 0  # if n_epochs is 0 we perform inference
-        self.dataloader, self.image_shape = self.get_dataloader_and_shape()
+        # heuristic channel guess if not provided
+        if rgb is None:
+            rgb = name not in {"MNIST", "FashionMNIST", "EMNIST", "QMNIST"}
 
-    def get_dataloader_and_shape(self):
-        Dataclass = getattr(torchvision.datasets, self.name_dataset)
-        dataset = Dataclass(
-            root=f'./data/{self.name_dataset}',
-            train=self.train,
-            download=True,
-            transform=ToTensor()
+        self.transform_train, self.transform_val = make_transforms_pair(
+            dataset_name=name,
+            img_size=img_size,
+            normalize_to_neg1=normalize_to_neg1,
+            apply_aug=apply_aug
         )
 
-        # Peek at the first sample to get image shape
-        sample_img, _ = dataset[0]          # sample_img: torch.Tensor, shape [C, H, W]
-        image_shape = tuple(sample_img.shape)
+        # pick adapter
+        adapter = ADAPTERS.get(name, _adapter_generic(name))
+        if split == "train" :
+            dataset = adapter(
+                split=split,
+                root=self.root,
+                transform=self.transform_train,
+                download=download,
+                **dataset_kwargs
+            )
+        elif split == "test" :
+            dataset = adapter(
+                split=split,
+                root=self.root,
+                transform=self.transform_val,
+                download=download,
+                **dataset_kwargs
+            )
+        else :
+            dataset, dataset_val = adapter(
+                split=split,
+                root=self.root,
+                transform=self.transform_train,
+                download=download,
+                val_ratio=val_ratio,
+                seed=seed,
+                transform_val=self.transform_val,
+                **dataset_kwargs
+            )
+            self.dataloader_val = DataLoader(
+                dataset_val,
+                batch_size=batch_size,
+                shuffle=shuffle,
+                num_workers=num_workers,
+                drop_last=drop_last,
+                pin_memory=pin_memory,
+                persistent_workers=persistent_workers,
+            )
 
-        dataloader = DataLoader(
+        self.image_shape = _first_batch_shape(dataset)
+        self.dataloader = DataLoader(
             dataset,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.n_workers
+            batch_size=batch_size,
+            shuffle=shuffle,
+            num_workers=num_workers,
+            drop_last=drop_last,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
         )
-
-        return dataloader, image_shape
