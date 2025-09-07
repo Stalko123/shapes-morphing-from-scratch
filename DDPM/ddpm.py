@@ -57,7 +57,6 @@ class DDPM:
         x_blurred, white_noise = self.blurData(x_rep, t)
         preds = self.denoiser(x_blurred, t)
         loss = F.mse_loss(preds, white_noise)
-
         return loss
 
     @torch.no_grad()
