@@ -8,26 +8,31 @@ python trainers/trainer.py \
     --n_epochs 100 \
     --verbose \
     --model "mlp" \
-    --dataset "MNIST" \
+    --dataset "CIFAR10" \
     --batch_size 8 \
-    --n_workers 4 \
+    --num_workers 4 \
+    --validation \
+    --test \
+    --val_ratio 0.05 \
+    --seed 42 \
     --num_trials 100 \
     --alpha_min 0.95 \
     --alpha_max 1.0 \
     --alpha_interp "linear" \
     --learning_rate 1e-5 \
     --dropout 0.2 \
-    --optimizer "adam" \
+    --optimizer_name "adam" \
+    --grad_clip 10.0 \
+    --activation "silu" \
     --time_base_dim 128 \
     --time_hidden 512 \
     --time_output_dim 256 \
-    --activation "silu" \
-    --norm_1d "layer" \
     --init_scheme "auto" \
     --hidden_sizes "2048, 2048, 1024, 1024" \
-    --exp_name "mnist_mlp_experiment" \
+    --norm_1d "layer" \
     --log_dir "./logs" \
     --checkpoint_dir "./checkpoints" \
     --save_frequency 50 \
     --output_dir "./outputs" \
-    --fps 5
+    --fps 5 \
+    --patience 10
