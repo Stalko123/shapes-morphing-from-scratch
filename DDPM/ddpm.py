@@ -56,7 +56,8 @@ class DDPM:
         x_rep = x.repeat_interleave(self.num_trials, dim=0)
         x_blurred, white_noise = self.blurData(x_rep, t)
         preds = self.denoiser(x_blurred, t)
-        loss = F.mse_loss(preds, white_noise, reduction='mean')
+        loss = F.mse_loss(preds, white_noise)
+
         return loss
 
     @torch.no_grad()
