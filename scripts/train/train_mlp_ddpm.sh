@@ -13,6 +13,7 @@ python trainers/trainer.py \
     --num_workers 4 \
     --validation \
     --test \
+    --use_amp \
     --val_ratio 0.05 \
     --seed 42 \
     --num_trials 100 \

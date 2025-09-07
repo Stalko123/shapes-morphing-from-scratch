@@ -5,14 +5,15 @@
 
 python trainers/trainer.py \
     --t_max 1000 \
-    --n_epochs 20 \
+    --n_epochs 10 \
     --verbose \
     --model "u-net" \
     --dataset "CIFAR10" \
-    --batch_size 4 \
+    --batch_size 8 \
     --num_workers 4 \
     --validation \
     --test \
+    --use_amp \
     --val_ratio 0.05 \
     --seed 42 \
     --num_trials 100 \
@@ -41,6 +42,6 @@ python trainers/trainer.py \
     --downsample "stride" \
     --log_dir "./logs" \
     --checkpoint_dir "./checkpoints" \
-    --save_frequency 50 \
+    --save_frequency 10 \
     --output_dir "./outputs" \
     --fps 5
