@@ -74,6 +74,7 @@ class Args:
         self.optimizer_name: str = args_parsed.optimizer_name
         self.grad_clip: float = args_parsed.grad_clip
         self.patience: int = args_parsed.patience
+        self.use_amp: bool = args_parsed.use_amp
 
         # ---------------------------
         # Model-shared knobs
