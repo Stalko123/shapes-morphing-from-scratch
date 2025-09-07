@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import math
-from init_utils import init
+from utils.model_utils.init_utils import init
 
 def sinusoidal_time_embed(t, dim):
     """
@@ -58,7 +58,7 @@ class TimeEmbed(nn.Module):
     @torch.no_grad()
     def _init_weights(self):
         for m in self.mlp:
-            init(m)
+            init(m, nonlin="relu", scheme="kaiming")
         
 
     def forward(self, t: torch.Tensor) -> torch.Tensor:

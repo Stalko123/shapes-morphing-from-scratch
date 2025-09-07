@@ -1,7 +1,7 @@
 from .argparser import args_parsed
 from DDPM.denoisers.denoisermlp.denoisermlp import DenoiserMLP
 from DDPM.denoisers.denoiserunet.denoiserunet import DenoiserUNet
-from loaders.dataloader import Dataloader
+from loaders.dataloader import Loader
 import torch
 import os
 import yaml
@@ -23,12 +23,36 @@ class Args:
         # ---------------------------
         # Data
         # ---------------------------
-        self.dataset_name: str = args_parsed.dataset
+        self.dataset_name: str = args_parsed.dataset_name
         self.batch_size: int = args_parsed.batch_size
-        self.n_workers: int = args_parsed.n_workers
-        self.dataset = Dataloader(self.dataset_name, self.batch_size, self.n_workers, self.n_epochs)
-        self.image_shape = self.dataset.image_shape  # (C, H, W)
-
+        self.num_workers: int = args_parsed.num_workers
+        self.validation = args_parsed.validation
+        self.test = args_parsed.test
+        self.val_ratio = args_parsed.val_ratio
+        self.seed = args_parsed.seed
+        if self.validation:
+            loader = Loader(name=self.dataset_name,
+                            batch_size=self.batch_size,
+                            num_workers=self.num_workers,
+                            split="train+val",
+                            val_ratio=self.val_ratio,
+                            seed = self.seed
+                            )
+            self.image_shape = loader.image_shape
+            self.dataloader_train = loader.dataloader
+            self.dataloader_val = loader.dataloader_val
+        else :
+            self.dataloader_train = Loader(name=self.dataset_name,
+                            batch_size=self.batch_size,
+                            num_workers=self.num_workers,
+                            split="train",
+                            )
+            self.image_shape = self.dataloader_train.image_shape
+        if self.test :
+            self.dataloader_test = Loader(name=self.dataset_name,
+                                       batch_size=self.batch_size,
+                                       num_workers=self.num_workers,
+                                       split="test").dataloader
         # ---------------------------
         # Diffusion schedule / MC
         # ---------------------------
@@ -47,7 +71,9 @@ class Args:
         # ---------------------------
         self.learning_rate: float = args_parsed.learning_rate
         self.dropout: float = args_parsed.dropout
-        self.optimizer_name: str = args_parsed.optimizer
+        self.optimizer_name: str = args_parsed.optimizer_name
+        self.grad_clip: float = args_parsed.grad_clip
+        self.patience: int = args_parsed.patience
 
         # ---------------------------
         # Model-shared knobs
@@ -81,8 +107,8 @@ class Args:
         # ---------------------------
         # Logging / checkpoints / outputs
         # ---------------------------
-        self.exp_name: str = args_parsed.exp_name
-        version_dir = self._get_next_version_dir(args_parsed.exp_name, args_parsed.log_dir)
+        self.exp_name: str = f"{self.dataset_name}_{self.model_name}_experiment"
+        version_dir = self._get_next_version_dir(self.exp_name, args_parsed.log_dir)
         self.log_dir: str = os.path.join(args_parsed.log_dir, self.exp_name, version_dir)
         self.checkpoint_dir: str = os.path.join(args_parsed.checkpoint_dir, self.exp_name, version_dir)
         self.save_frequency: int = args_parsed.save_frequency
@@ -104,7 +130,7 @@ class Args:
         # ---------------------------
         if args_parsed.model.lower() == "mlp":
             self.model = DenoiserMLP(
-                img_shape=self.dataset.image_shape,
+                img_shape=self.image_shape,
                 hidden_sizes=self.hidden_sizes,
                 time_base_dim=self.time_base_dim,
                 time_output_dim=self.time_output_dim,
@@ -116,7 +142,7 @@ class Args:
             )
         elif args_parsed.model.lower() == "unet" or args_parsed.model.lower() == "u-net":
             self.model = DenoiserUNet(
-                img_shape=self.dataset.image_shape,
+                img_shape=self.image_shape,
                 base_channels=self.base_channels,
                 channel_mults=self.channel_mults,
                 num_res_blocks=self.num_res_blocks,
