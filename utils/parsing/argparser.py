@@ -29,7 +29,7 @@ p.add_argument(
 # Data
 # --------------------------------------------------------------------------------------
 p.add_argument(
-    '--dataset',
+    '--dataset_name',
     default="CIFAR10",
     choices=["CIFAR10", "MNIST", "CelebA", "STL10"],
     type=str,
@@ -42,7 +42,7 @@ p.add_argument(
     help='Batch size.'
 )
 p.add_argument(
-    '--n_workers',
+    '--num_workers',
     default=4,
     type=int,
     help='Number of worker processes for the DataLoader.'
@@ -109,10 +109,49 @@ p.add_argument(
     help='Dropout probability used within the denoiser (applies to blocks that support it).'
 )
 p.add_argument(
-    '--optimizer',
+    '--optimizer_name',
     default="Adam",
     type=str,
     help='Optimizer used for training'
+)
+p.add_argument(
+    '--validation',
+    action='store_true',
+    help='Proceed to a validation step at each epoch.'
+)
+p.add_argument(
+    '--val_ratio',
+    default=0.05,
+    type=float,
+    help='Ratio between training and validation samples.'
+)
+p.add_argument(
+    '--seed',
+    default=42,
+    type=int,
+    help='Seed used to perform the split between the training and the validation sets.'
+)
+p.add_argument(
+    '--test',
+    action='store_true',
+    help='Proceed to a test step at the end of training.'
+)
+p.add_argument(
+    '--use_amp',
+    action='store_true',
+    help='Use AMP during training.'
+)
+p.add_argument(
+    '--grad_clip',
+    default=0.0,
+    type=float,
+    help='Maximal gradient norm (0.0 disables).'
+)
+p.add_argument(
+    '--patience',
+    default=0,
+    type=int,
+    help="Number of epochs without improvement before early-stopping (0 disables)."
 )
 
 # --------------------------------------------------------------------------------------
@@ -238,12 +277,6 @@ p.add_argument(
 # --------------------------------------------------------------------------------------
 # Logging / checkpoints / outputs
 # --------------------------------------------------------------------------------------
-p.add_argument(
-    '--exp_name',
-    default='default_experiment',
-    type=str,
-    help='Experiment name for organizing logs and checkpoints.'
-)
 p.add_argument(
     '--log_dir',
     default='./logs',
