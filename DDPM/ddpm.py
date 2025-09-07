@@ -10,7 +10,7 @@ class DDPM:
 
     def __init__(self, args=args):
         # data
-        self.dataset = args.dataset
+        self.image_shape = args.image_shape
 
         # model
         self.denoiser: nn.Module = args.model
@@ -83,9 +83,9 @@ class DDPM:
 
         x_t = torch.randn(
             n_samples,
-            self.dataset.C,
-            self.dataset.H,
-            self.dataset.W,
+            self.image_shape[0],
+            self.image_shape[1],
+            self.image_shape[2],
             device=device,
             dtype=dtype,
         )
