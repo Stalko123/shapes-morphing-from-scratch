@@ -17,14 +17,9 @@ class DDPM:
 
         # loss
         self.alphas: torch.Tensor = args.alphas
-        self.alphas_bar: torch.Tensor = DDPM.compute_alphas_bar(self.alphas)
+        self.alphas_bar: torch.Tensor = args.alphas_bar
         self.num_trials: int = args.num_trials
         self.t_max: int = args.t_max
-
-
-    @staticmethod
-    def compute_alphas_bar(alphas: torch.Tensor) -> torch.Tensor:
-        return torch.cumprod(alphas, dim=0)
 
     def blurData(
         self, 

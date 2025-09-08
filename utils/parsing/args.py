@@ -6,6 +6,7 @@ import torch
 import os
 import yaml
 import datetime
+import math
 
 class Args:
     def __init__(self, args_parsed):
@@ -63,8 +64,14 @@ class Args:
 
         if self.alpha_interp == "linear":
             self.alphas = torch.linspace(self.alpha_max, self.alpha_min, self.t_max)
+            self.alphas_bar = torch.cumprod(self.alphas, dim=0)
+        elif self.alpha_interp == "cosine":
+            self.alphas, self.alphas_bar = self.cosine_alpha_bar()
         else:
             raise ValueError(f"Argument error : interpolation method {args_parsed.alpha_interp} not implemented")
+        
+        if self.verbose:
+            print(f"Diffusion process info : last ᾱ is {self.alphas_bar[-1]}")
 
         # ---------------------------
         # Training hyperparameters
@@ -170,6 +177,18 @@ class Args:
 
         # Save hyperparameters to YAML file
         self._save_hyperparameters(args_parsed)
+
+
+    def cosine_alpha_bar(self, s: float = 0.08):
+        """
+        Nichol & Dhariwal alphas : enable linear decay of signal to noise ratio
+        """
+        T = self.t_max
+        t = torch.linspace(0, T, T+1, dtype=torch.float64) / T
+        f = torch.cos(( (t + s) / (1 + s) ) * math.pi / 2) ** 2
+        alpha_bar = (f / f[0]).clamp(min=1e-12, max=1.0)
+        alphas = (alpha_bar[1:] / alpha_bar[:-1]).clamp(min=1e-6, max=1-1e-6)
+        return alphas.float(), alpha_bar.float()
 
     def _get_next_version_dir(self, exp_name, base_log_dir):
         """Find the next available version directory for this experiment."""
