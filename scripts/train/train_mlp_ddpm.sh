@@ -9,7 +9,7 @@ python trainers/trainer.py \
     --verbose \
     --model "mlp" \
     --dataset "CIFAR10" \
-    --batch_size 8 \
+    --batch_size 32 \
     --num_workers 4 \
     --validation \
     --test \

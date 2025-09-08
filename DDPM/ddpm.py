@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple, Optional
 from utils.parsing.args import args
-from utils.viz.visualizer import Visualizer
 
 
 class DDPM:
@@ -63,7 +62,6 @@ class DDPM:
     def generate(
         self, 
         n_samples: int, 
-        visualise: bool = False,
         device: Optional[torch.device] = None
     ) -> torch.Tensor:
         """
@@ -90,10 +88,6 @@ class DDPM:
             dtype=dtype,
         )
 
-        if visualise:
-            visualiser = Visualizer(args, self)
-            frames = [x_t]
-
         for t in reversed(range(self.t_max)):                
             t_batch = torch.full((n_samples,), t, device=device, dtype=torch.long)
 
@@ -109,11 +103,5 @@ class DDPM:
                 
             else:
                 x_t = mean
-            
-            if visualise:
-                    frames.append(x_t)
-        
-        if visualise:
-            visualiser.save_gif(frames, args.output_dir)
 
         return x_t
