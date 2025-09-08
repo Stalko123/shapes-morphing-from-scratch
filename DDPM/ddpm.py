@@ -106,7 +106,7 @@ class DDPM:
                 x_t = mean
             
             if visualise:
-                    frames.append(x_t)
+                frames.append(x_t)
         
         if visualise:
             visualiser.save_gif(frames, args.output_dir)

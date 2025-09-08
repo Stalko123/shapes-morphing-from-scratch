@@ -13,13 +13,10 @@ python trainers/trainer.py \
     --num_workers 4 \
     --validation \
     --test \
-    --use_amp \
     --val_ratio 0.05 \
     --seed 42 \
-    --num_trials 100 \
-    --alpha_min 0.95 \
-    --alpha_max 1.0 \
-    --alpha_interp "linear" \
+    --num_trials 1 \
+    --alpha_interp "cosine" \
     --learning_rate 1e-5 \
     --dropout 0.2 \
     --optimizer_name "adam" \
