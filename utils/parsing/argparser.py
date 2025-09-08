@@ -73,25 +73,6 @@ p.add_argument(
     type=int,
     help="Number of Monte Carlo samples used inside the loss (if applicable)."
 )
-p.add_argument(
-    '--alpha_min',
-    default=0.9,
-    type=float,
-    help="Minimum per-step α used to build the (linear) alpha schedule."
-)
-p.add_argument(
-    '--alpha_max',
-    default=1.0,
-    type=float,
-    help="Maximum per-step α used to build the (linear) alpha schedule."
-)
-p.add_argument(
-    '--alpha_interp',
-    default="linear",
-    choices=["linear", "cosine", "quadratic"],
-    type=str,
-    help="Interpolation used to generate the per-step α schedule over t (default: linear)."
-)
 
 # --------------------------------------------------------------------------------------
 # Training hyperparameters

@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple, Optional
 from utils.parsing.args import args
-from utils.viz.visualizer import Visualizer
 
 
 class DDPM:
@@ -55,19 +54,13 @@ class DDPM:
         return loss
 
     @torch.no_grad()
-    def generate(
+    def generate_one_sample(
         self, 
-        n_samples: int, 
-        visualise: bool = False,
+        return_intermediates: bool = True,
         device: Optional[torch.device] = None
     ) -> torch.Tensor:
         """
         DDPM reverse process.
-        Args:
-          n_samples: number of images to generate
-          device: device for computation (default: alphas_bar.device)
-        Returns:
-          x0 samples: [n_samples, C, H, W]
         """
         device = device or self.alphas_bar.device
         dtype = self.alphas_bar.dtype
@@ -77,7 +70,7 @@ class DDPM:
         inv_sqrt_alpha = torch.rsqrt(self.alphas)
 
         x_t = torch.randn(
-            n_samples,
+            1,
             self.image_shape[0],
             self.image_shape[1],
             self.image_shape[2],
@@ -85,12 +78,11 @@ class DDPM:
             dtype=dtype,
         )
 
-        if visualise:
-            visualiser = Visualizer(args, self)
-            frames = [x_t]
+        if return_intermediates:
+            frames = [x_t[0].detach().cpu().clone()]
 
         for t in reversed(range(self.t_max)):                
-            t_batch = torch.full((n_samples,), t, device=device, dtype=torch.long)
+            t_batch = torch.full((1,), t, device=device, dtype=torch.long)
 
             eps_theta = self.denoiser(x_t, t_batch)
             c1 = inv_sqrt_alpha[t]
@@ -105,10 +97,10 @@ class DDPM:
             else:
                 x_t = mean
             
-            if visualise:
-                frames.append(x_t)
+            if return_intermediates:
+                frames.append(x_t[0].detach().cpu().clone())
         
-        if visualise:
-            visualiser.save_gif(frames, args.output_dir)
+        if return_intermediates:
+            return frames
 
         return x_t

@@ -1,9 +1,6 @@
 #!/bin/bash
 
-# Training script for DDPM shapes morphing
-# Run with: bash train.sh
-
-python trainers/trainer.py \
+python utils/viz/visualizer.py \
     --t_max 1000 \
     --n_epochs 20 \
     --verbose \
@@ -40,4 +37,5 @@ python trainers/trainer.py \
     --checkpoint_dir "./checkpoints" \
     --save_frequency 10 \
     --output_dir "./outputs" \
-    --fps 5
+    --path_to_weights "./checkpoints/CIFAR10_u-net_experiment/version_0/best.pth" \
+    --fps 10

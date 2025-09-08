@@ -58,17 +58,7 @@ class Args:
         # Diffusion schedule / MC
         # ---------------------------
         self.num_trials: int = args_parsed.num_trials
-        self.alpha_min: float = args_parsed.alpha_min
-        self.alpha_max: float = args_parsed.alpha_max
-        self.alpha_interp: str = args_parsed.alpha_interp
-
-        if self.alpha_interp == "linear":
-            self.alphas = torch.linspace(self.alpha_max, self.alpha_min, self.t_max)
-            self.alphas_bar = torch.cumprod(self.alphas, dim=0)
-        elif self.alpha_interp == "cosine":
-            self.alphas, self.alphas_bar = self.cosine_alpha_bar()
-        else:
-            raise ValueError(f"Argument error : interpolation method {args_parsed.alpha_interp} not implemented")
+        self.alphas, self.alphas_bar = self.cosine_alpha_bar()
         
         if self.verbose:
             print(f"Diffusion process info : last ᾱ is {self.alphas_bar[-1]}")
@@ -123,6 +113,7 @@ class Args:
         self.output_dir: str = os.path.join(args_parsed.output_dir, self.exp_name, version_dir)
         self.fps: int = args_parsed.fps
         self.path_to_weights: str = args_parsed.path_to_weights
+        print(self.path_to_weights)
         
         # Create directories if they don't exist
         os.makedirs(self.log_dir, exist_ok=True)
@@ -171,6 +162,15 @@ class Args:
         else:
             raise ValueError(f"Argument error : model {args_parsed.model} not implemented")
 
+        if self.path_to_weights:
+            try:
+                self.model.load_state_dict(torch.load(self.path_to_weights))
+            except:
+                try:
+                    self.model.load_state_dict(torch.load(self.path_to_weights)["model_state_dict"])
+                except:
+                    raise f"Invalid path to model weights {self.path_to_weights}"
+
         # Create optimizer after model is initialized
         if self.optimizer_name.lower() == 'adam':
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
@@ -217,6 +217,7 @@ class Args:
             next_version = 0
         
         return f"version_{next_version}"
+    
 
     def _save_hyperparameters(self, args_parsed):
         """Save all hyperparameters to a YAML file in the experiment directory."""
