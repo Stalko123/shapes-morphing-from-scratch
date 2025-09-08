@@ -45,6 +45,12 @@ class Visualizer:
         checkpoint = torch.load(self.checkpoint, map_location='cpu')
         img_shape = checkpoint['img_shape']
         
+        # Extract alpha schedule parameters from checkpoint (with fallbacks for older checkpoints)
+        self.t_max = checkpoint.get('t_max', 1000)
+        self.alpha_min = checkpoint.get('alpha_min', 0.95)
+        self.alpha_max = checkpoint.get('alpha_max', 1.0)
+        self.alpha_interp = checkpoint.get('alpha_interp', 'linear')
+        
                 # Infer model architecture from checkpoint
         state_dict = checkpoint['model_state_dict']
         
@@ -83,14 +89,16 @@ class Visualizer:
         return denoiser, img_shape, device
 
     def _create_ddpm(self):
-        """Create DDPM-like object."""
-        # This part is hardcoded for now, but we should make it more flexible using the config file that contains the hyperparameters
+        """Create DDPM-like object using checkpoint parameters."""
+        # Now using parameters from checkpoint instead of hardcoded values
         
-        '''Fill in the blanks here:
-        t_max = _
-        alpha_min, alpha_max = _ , _
-        alphas = _ , _
-        '''
+        # Generate alphas using the same logic as in args.py
+        if self.alpha_interp == "linear":
+            alphas = torch.linspace(self.alpha_max, self.alpha_min, self.t_max)
+        else:
+            raise ValueError(f"Argument error : interpolation method {self.alpha_interp} not implemented")
+        
+        alphas = alphas.to(self.device)
         
         # Create simple DDPM-like object
         ddpm = type('DDPM', (), {
@@ -98,7 +106,7 @@ class Visualizer:
             'image_shape': self.img_shape,
             'alphas': alphas,
             'alphas_bar': torch.cumprod(alphas, dim=0),
-            't_max': t_max
+            't_max': self.t_max
         })()
         
         return ddpm

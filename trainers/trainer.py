@@ -199,6 +199,10 @@ class Trainer:
             "img_shape": self.args.image_shape,
             "best_val": getattr(self, "best_val", None),
             "best_epoch": getattr(self, "best_epoch", None),
+            "t_max": self.args.t_max,
+            "alpha_min": self.args.alpha_min,
+            "alpha_max": self.args.alpha_max,
+            "alpha_interp": self.args.alpha_interp,
         }
         if epoch == "final":
             path = os.path.join(self.checkpoint_dir, "final.pth")
