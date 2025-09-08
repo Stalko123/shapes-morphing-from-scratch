@@ -61,9 +61,6 @@ class Visualizer :
             loop=0  # 0 means infinite loop
         )
 
-
-
-    
     def generate_gif(self, path, n_gifs):
         #load the denoiser weights, and visualise n_gifs random images from the dataset
 
