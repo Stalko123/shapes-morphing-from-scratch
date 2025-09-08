@@ -16,7 +16,6 @@ python trainers/trainer.py \
     --val_ratio 0.05 \
     --seed 42 \
     --num_trials 1 \
-    --alpha_interp "cosine" \
     --learning_rate 1e-5 \
     --dropout 0.2 \
     --optimizer_name "adam" \
