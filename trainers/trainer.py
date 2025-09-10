@@ -46,8 +46,11 @@ class Trainer:
 
         # Logging
         self.verbose = int(getattr(args, "verbose", 1))  # 0: quiet, 1: epoch logs + tqdm
-        log_dir = os.path.join(getattr(args, "log_dir", "./logs"), "tb_logs")
+        # Write TensorBoard logs under the version folder alongside checkpoints
+        log_dir = os.path.join(getattr(args, "checkpoint_dir", "./experiments"), "tb_logs")
         self.writer = SummaryWriter(log_dir=log_dir)
+        # expose for saving clarity
+        self.tb_log_dir = log_dir
 
         # Train cfg
         self.n_epochs = int(args.n_epochs)
