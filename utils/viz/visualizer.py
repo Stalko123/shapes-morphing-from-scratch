@@ -128,5 +128,7 @@ class Visualizer:
 
 
 if __name__ == "__main__":
-    from utils.parsing.inference.args_inference import args
-    viz = Visualizer(args)
+    from utils.parsing.inference.argparser_inference import p as inference_parser
+    from utils.parsing.inference.args_inference import InferenceArgs
+    parsed = inference_parser.parse_args()
+    viz = Visualizer(InferenceArgs(parsed))
