@@ -102,16 +102,17 @@ class TrainingArgs:
         # Logging / checkpoints / outputs
         # ---------------------------
         self.exp_name: str = f"{self.dataset_name}_{self.model_name}_experiment"
-        version_dir = self._get_next_version_dir(self.exp_name, args_parsed.log_dir)
-        self.log_dir: str = os.path.join(args_parsed.log_dir, self.exp_name, version_dir)
+        version_dir = self._get_next_version_dir(self.exp_name, args_parsed.checkpoint_dir)
+        # use checkpoint_dir (aka experiments root) as the base for versioning
         self.checkpoint_dir: str = os.path.join(args_parsed.checkpoint_dir, self.exp_name, version_dir)
+        self.log_dir: str = self.checkpoint_dir
         self.save_frequency: int = args_parsed.save_frequency
         self.output_dir: str = os.path.join(args_parsed.output_dir, self.exp_name, version_dir)
         self.path_to_weights: str = args_parsed.path_to_weights
         
         # Create directories if they don't exist
-        os.makedirs(self.log_dir, exist_ok=True)
         os.makedirs(self.checkpoint_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.checkpoint_dir, "tb_logs"), exist_ok=True)
         os.makedirs(self.output_dir, exist_ok=True)
         
         print(f"Experiment: {self.exp_name}")
@@ -173,33 +174,21 @@ class TrainingArgs:
         self._save_hyperparameters(args_parsed)
 
 
-    def _get_next_version_dir(self, exp_name, base_log_dir):
-        """Find the next available version directory for this experiment."""
-        exp_base_dir = os.path.join(base_log_dir, exp_name)
-        
-        # If experiment directory doesn't exist, start with version_0
-        if not os.path.exists(exp_base_dir):
+    def _get_next_version_dir(self, exp_name, base_dir):
+        """Find the next available version directory for this experiment under base_dir/exp_name."""
+        exp_base_dir = os.path.join(base_dir, exp_name)
+        os.makedirs(exp_base_dir, exist_ok=True)
+        entries = [d for d in os.listdir(exp_base_dir) if os.path.isdir(os.path.join(exp_base_dir, d)) and d.startswith("version_")]
+        if not entries:
             return "version_0"
-        
-        # Find existing version directories
-        existing_versions = []
-        for item in os.listdir(exp_base_dir):
-            item_path = os.path.join(exp_base_dir, item)
-            if os.path.isdir(item_path) and item.startswith("version_"):
-                try:
-                    version_num = int(item.split("_")[1])
-                    existing_versions.append(version_num)
-                except (ValueError, IndexError):
-                    # Skip directories that don't follow version_N format
-                    continue
-        
-        # Get the next version number
-        if existing_versions:
-            next_version = max(existing_versions) + 1
-        else:
-            next_version = 0
-        
-        return f"version_{next_version}"
+        max_idx = -1
+        for d in entries:
+            try:
+                idx = int(d.split("_")[1])
+                max_idx = max(max_idx, idx)
+            except Exception:
+                continue
+        return f"version_{max_idx + 1}"
     
 
     def _save_hyperparameters(self, args_parsed):
@@ -219,8 +208,8 @@ class TrainingArgs:
         hyperparams['full_checkpoint_dir'] = self.checkpoint_dir
         hyperparams['full_output_dir'] = self.output_dir
         
-        # Save to YAML file
-        config_path = os.path.join(self.log_dir, 'config.yml')
+        # Save to YAML file at the root of version_i folder (same as checkpoints)
+        config_path = os.path.join(self.checkpoint_dir, 'config.yml')
         with open(config_path, 'w') as f:
             yaml.dump(hyperparams, f, default_flow_style=False, sort_keys=True)
         

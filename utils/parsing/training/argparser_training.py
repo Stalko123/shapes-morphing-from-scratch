@@ -256,19 +256,25 @@ p.add_argument(
 )
 
 # --------------------------------------------------------------------------------------
-# Logging / checkpoints / outputs
+# Logging / experiments / outputs
 # --------------------------------------------------------------------------------------
 p.add_argument(
     '--log_dir',
     default='./logs',
     type=str,
-    help='Directory for TensorBoard logs.'
+    help='Directory for TensorBoard logs (metadata).'
+)
+p.add_argument(
+    '--experiments_dir',
+    default='./experiments',
+    type=str,
+    help='Root directory for experiments (contains {exp_name}/version_i).'
 )
 p.add_argument(
     '--checkpoint_dir',
-    default='./checkpoints',
+    default='./experiments',
     type=str,
-    help='Directory for model checkpoints.'
+    help='[Deprecated alias] Directory for model checkpoints (now same as experiments_dir).'
 )
 p.add_argument(
     '--save_frequency',
