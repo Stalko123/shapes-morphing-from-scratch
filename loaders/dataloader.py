@@ -51,7 +51,7 @@ class Loader:
         # pick adapter
         adapter = ADAPTERS.get(name, _adapter_generic(name))
         if split == "train" :
-            dataset = adapter(
+            self. dataset = adapter(
                 split=split,
                 root=self.root,
                 transform=self.transform_train,
@@ -59,7 +59,7 @@ class Loader:
                 **dataset_kwargs
             )
         elif split == "test" :
-            dataset = adapter(
+            self.dataset = adapter(
                 split=split,
                 root=self.root,
                 transform=self.transform_val,
@@ -67,7 +67,7 @@ class Loader:
                 **dataset_kwargs
             )
         else :
-            dataset, dataset_val = adapter(
+            self.dataset, self.dataset_val = adapter(
                 split=split,
                 root=self.root,
                 transform=self.transform_train,
@@ -78,7 +78,7 @@ class Loader:
                 **dataset_kwargs
             )
             self.dataloader_val = DataLoader(
-                dataset_val,
+                self.dataset_val,
                 batch_size=batch_size,
                 shuffle=shuffle,
                 num_workers=num_workers,
@@ -87,9 +87,9 @@ class Loader:
                 persistent_workers=persistent_workers,
             )
 
-        self.image_shape = _first_batch_shape(dataset)
+        self.image_shape = _first_batch_shape(self.dataset)
         self.dataloader = DataLoader(
-            dataset,
+            self.dataset,
             batch_size=batch_size,
             shuffle=shuffle,
             num_workers=num_workers,

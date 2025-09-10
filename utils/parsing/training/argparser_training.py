@@ -63,12 +63,6 @@ p.add_argument(
     type=str,
     help='Path to pretrained denoiser weights (if loading).'
 )
-p.add_argument(
-    '--path_to_yaml',
-    default=None,
-    type=str,
-    help='Path to yaml file (useful for inference).'
-)
 
 # --------------------------------------------------------------------------------------
 # Diffusion schedule / Monte Carlo
@@ -284,15 +278,9 @@ p.add_argument(
 )
 p.add_argument(
     '--output_dir',
-    default='./outputs',
+    default="./outputs",
     type=str,
-    help='Directory for generated samples/visualizations.'
-)
-p.add_argument(
-    '--fps',
-    default=5,
-    type=int,
-    help='Frames per second for generated GIFs/videos.'
+    help='Output directory.'
 )
 
 args_parsed = p.parse_args()

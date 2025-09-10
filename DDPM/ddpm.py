@@ -1,24 +1,37 @@
-import torch
+import torch, math
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple, Optional
-from utils.parsing.args import args
 
 
 class DDPM:
 
-    def __init__(self, args=args):
-        # data
-        self.image_shape = args.image_shape
+    def __init__(self, args):
 
         # model
+        self.denoiser_name: str = args.model_name
         self.denoiser: nn.Module = args.model
 
-        # loss
-        self.alphas: torch.Tensor = args.alphas
-        self.alphas_bar: torch.Tensor = args.alphas_bar
-        self.num_trials: int = args.num_trials
-        self.t_max: int = args.t_max
+        if hasattr(args, "image_shape"):
+            self.image_shape = args.image_shape
+        if hasattr(args, "t_max"):
+            self.t_max = args.t_max
+        if hasattr(args, "num_trials"):
+            self.num_trials = args.num_trials
+        
+        self.alphas, self.alphas_bar = self.cosine_alpha_bar()
+
+    
+    def cosine_alpha_bar(self, s: float = 0.08):
+        """
+        Nichol & Dhariwal alphas : enable linear decay of signal to noise ratio
+        """
+        T = self.t_max
+        t = torch.linspace(0, T, T+1, dtype=torch.float64) / T
+        f = torch.cos(( (t + s) / (1 + s) ) * math.pi / 2) ** 2
+        alpha_bar = (f / f[0]).clamp(min=1e-12, max=1.0)
+        alphas = (alpha_bar[1:] / alpha_bar[:-1]).clamp(min=1e-6, max=1-1e-6)
+        return alphas.float(), alpha_bar.float()
 
     def blurData(
         self, 
