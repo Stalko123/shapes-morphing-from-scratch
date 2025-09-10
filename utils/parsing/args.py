@@ -113,7 +113,7 @@ class Args:
         self.output_dir: str = os.path.join(args_parsed.output_dir, self.exp_name, version_dir)
         self.fps: int = args_parsed.fps
         self.path_to_weights: str = args_parsed.path_to_weights
-        print(self.path_to_weights)
+        self.path_to_yaml: str = args_parsed.path_to_yaml
         
         # Create directories if they don't exist
         os.makedirs(self.log_dir, exist_ok=True)
