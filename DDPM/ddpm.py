@@ -1,30 +1,37 @@
-import torch
+import torch, math
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple, Optional
-from utils.parsing.args import args
-from utils.viz.visualizer import Visualizer
 
 
 class DDPM:
 
-    def __init__(self, args=args):
-        # data
-        self.dataset = args.dataset
+    def __init__(self, args):
 
         # model
+        self.denoiser_name: str = args.model_name
         self.denoiser: nn.Module = args.model
 
-        # loss
-        self.alphas: torch.Tensor = args.alphas
-        self.alphas_bar: torch.Tensor = DDPM.compute_alphas_bar(self.alphas)
-        self.num_trials: int = args.num_trials
-        self.t_max: int = args.t_max
+        if hasattr(args, "image_shape"):
+            self.image_shape = args.image_shape
+        if hasattr(args, "t_max"):
+            self.t_max = args.t_max
+        if hasattr(args, "num_trials"):
+            self.num_trials = args.num_trials
+        
+        self.alphas, self.alphas_bar = self.cosine_alpha_bar()
 
-
-    @staticmethod
-    def compute_alphas_bar(alphas: torch.Tensor) -> torch.Tensor:
-        return torch.cumprod(alphas, dim=0)
+    
+    def cosine_alpha_bar(self, s: float = 0.08):
+        """
+        Nichol & Dhariwal alphas : enable linear decay of signal to noise ratio
+        """
+        T = self.t_max
+        t = torch.linspace(0, T, T+1, dtype=torch.float64) / T
+        f = torch.cos(( (t + s) / (1 + s) ) * math.pi / 2) ** 2
+        alpha_bar = (f / f[0]).clamp(min=1e-12, max=1.0)
+        alphas = (alpha_bar[1:] / alpha_bar[:-1]).clamp(min=1e-6, max=1-1e-6)
+        return alphas.float(), alpha_bar.float()
 
     def blurData(
         self, 
@@ -56,23 +63,17 @@ class DDPM:
         x_rep = x.repeat_interleave(self.num_trials, dim=0)
         x_blurred, white_noise = self.blurData(x_rep, t)
         preds = self.denoiser(x_blurred, t)
-        loss = F.mse_loss(preds, white_noise, reduction='mean')
+        loss = F.mse_loss(preds, white_noise)
         return loss
 
     @torch.no_grad()
-    def generate(
+    def generate_one_sample(
         self, 
-        n_samples: int, 
-        visualise: bool = False,
+        return_intermediates: bool = True,
         device: Optional[torch.device] = None
     ) -> torch.Tensor:
         """
         DDPM reverse process.
-        Args:
-          n_samples: number of images to generate
-          device: device for computation (default: alphas_bar.device)
-        Returns:
-          x0 samples: [n_samples, C, H, W]
         """
         device = device or self.alphas_bar.device
         dtype = self.alphas_bar.dtype
@@ -82,20 +83,19 @@ class DDPM:
         inv_sqrt_alpha = torch.rsqrt(self.alphas)
 
         x_t = torch.randn(
-            n_samples,
-            self.dataset.C,
-            self.dataset.H,
-            self.dataset.W,
+            1,
+            self.image_shape[0],
+            self.image_shape[1],
+            self.image_shape[2],
             device=device,
             dtype=dtype,
         )
 
-        if visualise:
-            visualiser = Visualizer(args, self)
-            frames = [x_t]
+        if return_intermediates:
+            frames = [x_t[0].detach().cpu().clone()]
 
         for t in reversed(range(self.t_max)):                
-            t_batch = torch.full((n_samples,), t, device=device, dtype=torch.long)
+            t_batch = torch.full((1,), t, device=device, dtype=torch.long)
 
             eps_theta = self.denoiser(x_t, t_batch)
             c1 = inv_sqrt_alpha[t]
@@ -110,10 +110,10 @@ class DDPM:
             else:
                 x_t = mean
             
-            if visualise:
-                    frames.append(x_t)
+            if return_intermediates:
+                frames.append(x_t[0].detach().cpu().clone())
         
-        if visualise:
-            visualiser.save_gif(frames, args.output_dir)
+        if return_intermediates:
+            return frames
 
         return x_t

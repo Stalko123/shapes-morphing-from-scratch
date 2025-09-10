@@ -29,7 +29,7 @@ p.add_argument(
 # Data
 # --------------------------------------------------------------------------------------
 p.add_argument(
-    '--dataset',
+    '--dataset_name',
     default="CIFAR10",
     choices=["CIFAR10", "MNIST", "CelebA", "STL10"],
     type=str,
@@ -42,7 +42,7 @@ p.add_argument(
     help='Batch size.'
 )
 p.add_argument(
-    '--n_workers',
+    '--num_workers',
     default=4,
     type=int,
     help='Number of worker processes for the DataLoader.'
@@ -53,8 +53,7 @@ p.add_argument(
 # --------------------------------------------------------------------------------------
 p.add_argument(
     '--model',
-    default="MLP",
-    choices=["MLP", "CNN", "U-Net"],
+    required=True,
     type=str,
     help='Denoiser backbone.'
 )
@@ -74,25 +73,6 @@ p.add_argument(
     type=int,
     help="Number of Monte Carlo samples used inside the loss (if applicable)."
 )
-p.add_argument(
-    '--alpha_min',
-    default=0.9,
-    type=float,
-    help="Minimum per-step α used to build the (linear) alpha schedule."
-)
-p.add_argument(
-    '--alpha_max',
-    default=1.0,
-    type=float,
-    help="Maximum per-step α used to build the (linear) alpha schedule."
-)
-p.add_argument(
-    '--alpha_interp',
-    default="linear",
-    choices=["linear", "cosine", "quadratic"],
-    type=str,
-    help="Interpolation used to generate the per-step α schedule over t (default: linear)."
-)
 
 # --------------------------------------------------------------------------------------
 # Training hyperparameters
@@ -110,10 +90,49 @@ p.add_argument(
     help='Dropout probability used within the denoiser (applies to blocks that support it).'
 )
 p.add_argument(
-    '--optimizer',
+    '--optimizer_name',
     default="Adam",
     type=str,
     help='Optimizer used for training'
+)
+p.add_argument(
+    '--validation',
+    action='store_true',
+    help='Proceed to a validation step at each epoch.'
+)
+p.add_argument(
+    '--val_ratio',
+    default=0.05,
+    type=float,
+    help='Ratio between training and validation samples.'
+)
+p.add_argument(
+    '--seed',
+    default=42,
+    type=int,
+    help='Seed used to perform the split between the training and the validation sets.'
+)
+p.add_argument(
+    '--test',
+    action='store_true',
+    help='Proceed to a test step at the end of training.'
+)
+p.add_argument(
+    '--use_amp',
+    action='store_true',
+    help='Use AMP during training.'
+)
+p.add_argument(
+    '--grad_clip',
+    default=0.0,
+    type=float,
+    help='Maximal gradient norm (0.0 disables).'
+)
+p.add_argument(
+    '--patience',
+    default=0,
+    type=int,
+    help="Number of epochs without improvement before early-stopping (0 disables)."
 )
 
 # --------------------------------------------------------------------------------------
@@ -121,28 +140,14 @@ p.add_argument(
 # --------------------------------------------------------------------------------------
 p.add_argument(
     '--hidden_sizes',
-    default=[1024, 1024],
-    type=int,
-    nargs='+',
-    help='Hidden layer sizes for the MLP denoiser (space-separated list).'
+    default=(2048, 1024),
+    type=lambda s: tuple(map(int, s.split(","))),
+    help="Width of the MLP's hidden layers (comma-separated), e.g. '1,2,4'."
 )
 p.add_argument(
-    '--time_dim',
-    default=128,
-    type=int,
-    help='Time embedding dimension (MLP or CNN/U-Net time MLP output).'
-)
-p.add_argument(
-    '--activation',
-    default="silu",
-    choices=["silu", "relu", "gelu", "tanh"],
-    type=str,
-    help='Activation function.'
-)
-p.add_argument(
-    '--norm',
+    '--norm_1d',
     default="layer",
-    choices=["none", "layer", "batch", "batch2d", "group", "instance", "layer2d"],
+    choices=["none", "layer", "batch"],
     type=str,
     help='Normalization type: for MLP use {"none","layer","batch"}; for CNN/U-Net use the 2D variants.'
 )
@@ -182,12 +187,6 @@ p.add_argument(
     help="Number of residual blocks in the bottleneck stage."
 )
 p.add_argument(
-    '--kernel_size',
-    default=3,
-    type=int,
-    help="Convolution kernel size for main convs (odd values keep spatial size with same padding)."
-)
-p.add_argument(
     '--downsample',
     default="stride",
     choices=["stride", "pool", "avgpool"],
@@ -208,21 +207,57 @@ p.add_argument(
     help="Number of groups for GroupNorm (CNN/U-Net)."
 )
 p.add_argument(
+    '--norm_2d',
+    default="group",
+    choices=["none","batch2d","group","instance","layer2d"],
+    type=str,
+    help="Normalization type: for CNN/U-Net use {'none','batch2d','group','instance','layer2d'}; for MLP use the 1D variants."
+)
+p.add_argument(
+    '--stem_kernel',
+    default=5,
+    type=int,
+    help="Convolution kernel size of the first hidden-layer."
+)
+p.add_argument(
+    '--head_kernel',
+    default=5,
+    type=int,
+    help="Convolution kernel size of the last hidden-layer."
+)
+
+# --------------------------------------------------------------------------------------
+# Shared knobs
+# --------------------------------------------------------------------------------------
+p.add_argument(
+    '--activation',
+    default="silu",
+    choices=["silu", "relu", "gelu", "tanh"],
+    type=str,
+    help='Activation function.'
+)
+p.add_argument(
+    '--time_base_dim',
+    default=128,
+    type=int,
+    help='Dimension of the time embedding'
+)
+p.add_argument(
     '--time_hidden',
     default=512,
     type=int,
-    help="Hidden size of the time embedding MLP (before projecting to --time_dim)."
+    help='Hidden dimension of the time embedder MLP'
+)
+p.add_argument(
+    '--time_output_dim',
+    default=256,
+    type=int,
+    help='Output dimension of the time embedder MLP'
 )
 
 # --------------------------------------------------------------------------------------
 # Logging / checkpoints / outputs
 # --------------------------------------------------------------------------------------
-p.add_argument(
-    '--exp_name',
-    default='default_experiment',
-    type=str,
-    help='Experiment name for organizing logs and checkpoints.'
-)
 p.add_argument(
     '--log_dir',
     default='./logs',
@@ -243,15 +278,9 @@ p.add_argument(
 )
 p.add_argument(
     '--output_dir',
-    default='./outputs',
+    default="./outputs",
     type=str,
-    help='Directory for generated samples/visualizations.'
-)
-p.add_argument(
-    '--fps',
-    default=5,
-    type=int,
-    help='Frames per second for generated GIFs/videos.'
+    help='Output directory.'
 )
 
 args_parsed = p.parse_args()

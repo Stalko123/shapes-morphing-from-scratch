@@ -1,12 +1,14 @@
-from .argparser import args_parsed
+from .argparser_training import args_parsed
 from DDPM.denoisers.denoisermlp.denoisermlp import DenoiserMLP
 from DDPM.denoisers.denoiserunet.denoiserunet import DenoiserUNet
-from loaders.dataloader import Dataloader
+from loaders.dataloader import Loader
 import torch
 import os
 import yaml
+import datetime
+import math
 
-class Args:
+class TrainingArgs:
     def __init__(self, args_parsed):
 
         self.args_parsed = args_parsed
@@ -22,41 +24,65 @@ class Args:
         # ---------------------------
         # Data
         # ---------------------------
-        self.dataset_name: str = args_parsed.dataset
+        self.dataset_name: str = args_parsed.dataset_name
         self.batch_size: int = args_parsed.batch_size
-        self.n_workers: int = args_parsed.n_workers
-        self.dataset = Dataloader(self.dataset_name, self.batch_size, self.n_workers, self.n_epochs)
-        self.image_shape = self.dataset.image_shape  # (C, H, W)
-
+        self.num_workers: int = args_parsed.num_workers
+        self.validation = args_parsed.validation
+        self.test = args_parsed.test
+        self.val_ratio = args_parsed.val_ratio
+        self.seed = args_parsed.seed
+        if self.validation:
+            loader = Loader(name=self.dataset_name,
+                            batch_size=self.batch_size,
+                            num_workers=self.num_workers,
+                            split="train+val",
+                            val_ratio=self.val_ratio,
+                            seed = self.seed
+                            )
+            self.image_shape = loader.image_shape
+            self.dataloader_train = loader.dataloader
+            self.dataloader_val = loader.dataloader_val
+        else :
+            self.dataloader_train = Loader(name=self.dataset_name,
+                            batch_size=self.batch_size,
+                            num_workers=self.num_workers,
+                            split="train",
+                            )
+            self.image_shape = self.dataloader_train.image_shape
+        if self.test :
+            self.dataloader_test = Loader(name=self.dataset_name,
+                                       batch_size=self.batch_size,
+                                       num_workers=self.num_workers,
+                                       split="test").dataloader
         # ---------------------------
         # Diffusion schedule / MC
         # ---------------------------
         self.num_trials: int = args_parsed.num_trials
-        self.alpha_min: float = args_parsed.alpha_min
-        self.alpha_max: float = args_parsed.alpha_max
-        self.alpha_interp: str = args_parsed.alpha_interp
-
-        # precompute alphas 
-        if self.alpha_interp == "linear":
-            self.alphas = torch.linspace(self.alpha_max, self.alpha_min, self.t_max)
-        else:
-            raise ValueError(f"Argument error : interpolation method {args_parsed.alpha_interp} not implemented")
-
+        
         # ---------------------------
         # Training hyperparameters
         # ---------------------------
         self.learning_rate: float = args_parsed.learning_rate
         self.dropout: float = args_parsed.dropout
-        self.optimizer_name = args_parsed.optimizer
+        self.optimizer_name: str = args_parsed.optimizer_name
+        self.grad_clip: float = args_parsed.grad_clip
+        self.patience: int = args_parsed.patience
+        self.use_amp: bool = args_parsed.use_amp
 
         # ---------------------------
         # Model-shared knobs
         # ---------------------------
-        self.time_dim: int = args_parsed.time_dim
         self.activation: str = args_parsed.activation
-        self.norm: str = args_parsed.norm
+        self.time_base_dim: int = args_parsed.time_base_dim
+        self.time_hidden: int = args_parsed.time_hidden
+        self.time_output_dim: int = args_parsed.time_output_dim
         self.init_scheme: str = args_parsed.init_scheme
+
+        # ---------------------------
+        # MLP-specific
+        # ---------------------------
         self.hidden_sizes = args_parsed.hidden_sizes
+        self.norm_1d: str = args_parsed.norm_1d                     # normalization method used
 
         # ---------------------------
         # U-Net / CNN-specific
@@ -67,24 +93,21 @@ class Args:
         self.upsample: str = args_parsed.upsample                   # "convtranspose" | "nearest_conv"
         self.groups: int = args_parsed.groups                       # GroupNorm groups
         self.num_res_blocks_in_bottleneck: int = args_parsed.num_res_blocks_in_bottleneck
-        self.kernel_size: int = args_parsed.kernel_size
+        self.norm_2d: str = args_parsed.norm_2d                     # normalization method used
+        self.stem_kernel: int = args_parsed.stem_kernel             # kernel size of the stem layer
+        self.head_kernel: int = args_parsed.head_kernel             # kernel size of the head layer
         self.downsample: str = args_parsed.downsample               # "stride" | "pool" | "avgpool"
-        self.time_hidden: int = args_parsed.time_hidden             # time MLP hidden
 
         # ---------------------------
         # Logging / checkpoints / outputs
         # ---------------------------
-        self.exp_name: str = args_parsed.exp_name
-        
-        # Get the next version number for this experiment
-        version_dir = self._get_next_version_dir(args_parsed.exp_name, args_parsed.log_dir)
-        
+        self.exp_name: str = f"{self.dataset_name}_{self.model_name}_experiment"
+        version_dir = self._get_next_version_dir(self.exp_name, args_parsed.log_dir)
         self.log_dir: str = os.path.join(args_parsed.log_dir, self.exp_name, version_dir)
         self.checkpoint_dir: str = os.path.join(args_parsed.checkpoint_dir, self.exp_name, version_dir)
         self.save_frequency: int = args_parsed.save_frequency
         self.output_dir: str = os.path.join(args_parsed.output_dir, self.exp_name, version_dir)
-        self.fps: int = args_parsed.fps
-        self.path_to_weights = args_parsed.path_to_weights
+        self.path_to_weights: str = args_parsed.path_to_weights
         
         # Create directories if they don't exist
         os.makedirs(self.log_dir, exist_ok=True)
@@ -100,33 +123,47 @@ class Args:
         # ---------------------------
         if args_parsed.model.lower() == "mlp":
             self.model = DenoiserMLP(
-                self.dataset.image_shape,
-                self.hidden_sizes,
-                self.time_dim,
-                self.activation,
-                self.norm,
-                self.dropout,
-                self.init_scheme
+                img_shape=self.image_shape,
+                hidden_sizes=self.hidden_sizes,
+                time_base_dim=self.time_base_dim,
+                time_output_dim=self.time_output_dim,
+                time_hidden=self.time_hidden,
+                activation=self.activation,
+                norm=self.norm_1d,
+                dropout=self.dropout,
+                init_scheme=self.init_scheme
             )
-        elif args_parsed.model.lower() == "unet":
+        elif args_parsed.model.lower() == "unet" or args_parsed.model.lower() == "u-net":
             self.model = DenoiserUNet(
-                self.dataset.image_shape,
-                self.base_channels,
-                self.channel_mults,
-                self.num_res_blocks,
-                self.upsample,
-                self.norm,
-                self.groups,
-                self.num_res_blocks_in_bottleneck,
-                self.kernel_size,
-                self.downsample,
-                self.activation,
-                self.time_dim,
-                self.time_hidden,
-                self.dropout
+                img_shape=self.image_shape,
+                base_channels=self.base_channels,
+                channel_mults=self.channel_mults,
+                num_res_blocks=self.num_res_blocks,
+                upsample=self.upsample,
+                norm=self.norm_2d,
+                groups=self.groups,
+                num_res_blocks_in_bottleneck=self.num_res_blocks_in_bottleneck,
+                stem_kernel=self.stem_kernel,
+                head_kernel=self.head_kernel,
+                downsample=self.downsample,
+                activation=self.activation,
+                time_base_dim=self.time_base_dim,
+                time_output_dim=self.time_output_dim,
+                time_hidden=self.time_hidden,
+                dropout=self.dropout,
             )
+
         else:
             raise ValueError(f"Argument error : model {args_parsed.model} not implemented")
+
+        if self.path_to_weights:
+            try:
+                self.model.load_state_dict(torch.load(self.path_to_weights))
+            except:
+                try:
+                    self.model.load_state_dict(torch.load(self.path_to_weights)["model_state_dict"])
+                except:
+                    raise f"Invalid path to model weights {self.path_to_weights}"
 
         # Create optimizer after model is initialized
         if self.optimizer_name.lower() == 'adam':
@@ -134,6 +171,7 @@ class Args:
 
         # Save hyperparameters to YAML file
         self._save_hyperparameters(args_parsed)
+
 
     def _get_next_version_dir(self, exp_name, base_log_dir):
         """Find the next available version directory for this experiment."""
@@ -162,6 +200,7 @@ class Args:
             next_version = 0
         
         return f"version_{next_version}"
+    
 
     def _save_hyperparameters(self, args_parsed):
         """Save all hyperparameters to a YAML file in the experiment directory."""
@@ -174,7 +213,6 @@ class Args:
         hyperparams['trainable_parameters'] = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         
         # Add experiment versioning info
-        import datetime
         hyperparams['experiment_version'] = os.path.basename(self.log_dir)  # e.g., "version_1"
         hyperparams['timestamp'] = datetime.datetime.now().isoformat()
         hyperparams['full_log_dir'] = self.log_dir
@@ -189,4 +227,4 @@ class Args:
         print(f"Hyperparameters saved to: {config_path}")
 
 
-args = Args(args_parsed)
+args = TrainingArgs(args_parsed)
