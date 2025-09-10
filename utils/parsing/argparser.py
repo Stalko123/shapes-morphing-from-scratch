@@ -63,6 +63,12 @@ p.add_argument(
     type=str,
     help='Path to pretrained denoiser weights (if loading).'
 )
+p.add_argument(
+    '--path_to_yaml',
+    default=None,
+    type=str,
+    help='Path to yaml file (useful for inference).'
+)
 
 # --------------------------------------------------------------------------------------
 # Diffusion schedule / Monte Carlo
