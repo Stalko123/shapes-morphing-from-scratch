@@ -1,4 +1,4 @@
-from .argparser import args_parsed
+from .argparser_training import args_parsed
 from DDPM.denoisers.denoisermlp.denoisermlp import DenoiserMLP
 from DDPM.denoisers.denoiserunet.denoiserunet import DenoiserUNet
 from loaders.dataloader import Loader
@@ -8,7 +8,7 @@ import yaml
 import datetime
 import math
 
-class Args:
+class TrainingArgs:
     def __init__(self, args_parsed):
 
         self.args_parsed = args_parsed
@@ -58,11 +58,7 @@ class Args:
         # Diffusion schedule / MC
         # ---------------------------
         self.num_trials: int = args_parsed.num_trials
-        self.alphas, self.alphas_bar = self.cosine_alpha_bar()
         
-        if self.verbose:
-            print(f"Diffusion process info : last ᾱ is {self.alphas_bar[-1]}")
-
         # ---------------------------
         # Training hyperparameters
         # ---------------------------
@@ -111,9 +107,7 @@ class Args:
         self.checkpoint_dir: str = os.path.join(args_parsed.checkpoint_dir, self.exp_name, version_dir)
         self.save_frequency: int = args_parsed.save_frequency
         self.output_dir: str = os.path.join(args_parsed.output_dir, self.exp_name, version_dir)
-        self.fps: int = args_parsed.fps
         self.path_to_weights: str = args_parsed.path_to_weights
-        self.path_to_yaml: str = args_parsed.path_to_yaml
         
         # Create directories if they don't exist
         os.makedirs(self.log_dir, exist_ok=True)
@@ -179,17 +173,6 @@ class Args:
         self._save_hyperparameters(args_parsed)
 
 
-    def cosine_alpha_bar(self, s: float = 0.08):
-        """
-        Nichol & Dhariwal alphas : enable linear decay of signal to noise ratio
-        """
-        T = self.t_max
-        t = torch.linspace(0, T, T+1, dtype=torch.float64) / T
-        f = torch.cos(( (t + s) / (1 + s) ) * math.pi / 2) ** 2
-        alpha_bar = (f / f[0]).clamp(min=1e-12, max=1.0)
-        alphas = (alpha_bar[1:] / alpha_bar[:-1]).clamp(min=1e-6, max=1-1e-6)
-        return alphas.float(), alpha_bar.float()
-
     def _get_next_version_dir(self, exp_name, base_log_dir):
         """Find the next available version directory for this experiment."""
         exp_base_dir = os.path.join(base_log_dir, exp_name)
@@ -244,4 +227,4 @@ class Args:
         print(f"Hyperparameters saved to: {config_path}")
 
 
-args = Args(args_parsed)
+args = TrainingArgs(args_parsed)

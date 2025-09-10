@@ -40,4 +40,3 @@ python trainers/trainer.py \
     --checkpoint_dir "./checkpoints" \
     --save_frequency 50 \
     --output_dir "./outputs" \
-    --fps 5

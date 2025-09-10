@@ -38,7 +38,6 @@ class Trainer:
         self.test_loader: Optional[DataLoader] = args.dataloader_test if self.has_test else None
 
         # Model & DDPM wrapper
-        self.alphas = args.alphas.to(self.device)
         self.denoiser: nn.Module = args.model.to(self.device)
         self.ddpm = DDPM(args)
 
@@ -214,7 +213,7 @@ class Trainer:
 
 
 def main():
-    from utils.parsing.args import args
+    from utils.parsing.training.args_training import args
     print("Starting training...")
     trainer = Trainer(args)
     trainer.train()
