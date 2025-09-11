@@ -155,6 +155,9 @@ class TrainingArgs:
                 time_output_dim=self.time_output_dim,
                 time_hidden=self.time_hidden,
                 dropout=self.dropout,
+                attn_stages=self.attn_stages,
+                attn_num_heads=self.attn_num_heads,
+                attn_in_bottleneck=self.attn_in_bottleneck
             )
 
         else:

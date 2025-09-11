@@ -52,7 +52,6 @@ class DenoiserUNet(nn.Module):
         self.stem_kernel = stem_kernel
         self.head_kernel = head_kernel
         self.init_scheme = init_scheme
-        self.attn_stages = attn_stages
         self.attn_num_heads = attn_num_heads
         self.attn_in_bottleneck = attn_in_bottleneck
 
@@ -71,6 +70,7 @@ class DenoiserUNet(nn.Module):
             if S >= 2:
                 attn_stages[-2] = True
         assert len(attn_stages) == S
+        self.attn_stages = attn_stages
 
         # time embedding
         self.time_base_dim = time_base_dim
@@ -101,6 +101,8 @@ class DenoiserUNet(nn.Module):
 
             if self.attn_stages[s]:
                 enc_blocks.append(Attention2d(ch, num_heads=self.attn_num_heads, norm=norm, groups=groups))
+
+            enc_channels.append(ch)
 
             # downsample except last stage
             if s < S - 1:

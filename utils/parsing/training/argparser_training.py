@@ -1,4 +1,5 @@
 import configargparse
+from ..str2bool import str2bool
 
 p = configargparse.ArgParser(
     description="Training and evaluation config for DDPM denoisers (MLP/CNN/U-Net)."
@@ -228,7 +229,7 @@ p.add_argument(
 p.add_argument(
     '--attn_stages',
     default=(False, True, True),
-    type=lambda s: tuple(map(bool, s.split(","))),
+    type=lambda s: tuple(str2bool(x) for x in s.split(",")),
     help="Where to use attention (comma-separated), e.g. 'False,True,True'."
 )
 p.add_argument(
