@@ -48,9 +48,26 @@ p.add_argument(
     help='Frames per second for generated GIFs/videos.'
 )
 p.add_argument(
-    '--visualize_noising',
+    '--seed',
+    default=42,
+    type=int,
+    help='Seed for the randomness of the Visualizer.'
+)
+p.add_argument(
+    '--viz_noising',
     action='store_true',
     help='Flag to visualize a noising process.'
+)
+p.add_argument(
+    '--viz_progressive_denoising',
+    action='store_true',
+    help='Flag to visualize a denoising process.'
+)
+p.add_argument(
+    '--viz_denoising_from_t',
+    default=0,
+    type=lambda s: tuple(map(int, s.split(","))),
+    help="Instants from which denoising is to be visualized (0 disables)."
 )
 p.add_argument(
     '--generate_gifs',

@@ -26,18 +26,21 @@ class InferenceArgs:
         # Logging / checkpoints / outputs
         # ---------------------------
         self.version: int = args_parsed.version
-        self.output_dir: str = args_parsed.output_dir or f'./outputs/{self.dataset_name}_{self.model_name}_experiment/version_{self.version}/'
+        self.output_dir: str = args_parsed.output_dir or f'./outputs/{self.dataset_name}_{self.model_name}_experiment/version_{self.version}'
 
         # ---------------------------
         # Viz
         # ---------------------------
         self.fps = args_parsed.fps
-        self.visualize_noising = args_parsed.visualize_noising
+        self.seed = args_parsed.seed
+        self.viz_noising = args_parsed.viz_noising
+        self.viz_progressive_denoising = args_parsed.viz_progressive_denoising
+        self.viz_denoising_from_t = args_parsed.viz_denoising_from_t
         self.generate_gifs = args_parsed.generate_gifs
 
         # Paths :
         self.path_to_weights = args_parsed.path_to_weights or f"./checkpoints/{self.dataset_name}_{self.model_name}_experiment/version_{self.version}/best.pth"
-        self.path_to_yaml = args_parsed.path_to_yaml or f"./logs/{self.dataset_name}_{self.model_name}_experiment/version_{self.version}/config.yml"
+        self.path_to_yaml = args_parsed.path_to_yaml or f"./checkpoints/{self.dataset_name}_{self.model_name}_experiment/version_{self.version}/config.yml"
         assert os.path.exists(self.path_to_weights), f"InferenceArgs error : path {self.path_to_weights} doesn't exist."
         assert os.path.exists(self.path_to_yaml), f"InferenceArgs error : path {self.path_to_yaml} doesn't exist."
 
