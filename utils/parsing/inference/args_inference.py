@@ -40,7 +40,7 @@ class InferenceArgs:
 
         # Paths :
         self.path_to_weights = args_parsed.path_to_weights or f"./checkpoints/{self.dataset_name}_{self.model_name}_experiment/version_{self.version}/best.pth"
-        self.path_to_yaml = args_parsed.path_to_yaml or f"./logs/{self.dataset_name}_{self.model_name}_experiment/version_{self.version}/config.yml"
+        self.path_to_yaml = args_parsed.path_to_yaml or f"./checkpoints/{self.dataset_name}_{self.model_name}_experiment/version_{self.version}/config.yml"
         assert os.path.exists(self.path_to_weights), f"InferenceArgs error : path {self.path_to_weights} doesn't exist."
         assert os.path.exists(self.path_to_yaml), f"InferenceArgs error : path {self.path_to_yaml} doesn't exist."
 

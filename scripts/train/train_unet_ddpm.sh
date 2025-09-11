@@ -20,18 +20,18 @@ python trainers/trainer.py \
     --dropout 0 \
     --optimizer_name "adam" \
     --grad_clip 0.0 \
-    --patience 20 \
+    --patience 0 \
     --activation "silu" \
     --time_base_dim 128 \
     --time_hidden 256 \
     --time_output_dim 128 \
     --init_scheme "auto" \
     --base_channels 64 \
-    --channel_mults 1,2,2,4 \
+    --channel_mults 1,2,2,4,8 \
     --num_res_blocks 2 \
     --upsample "nearest_conv" \
     --groups 32 \
-    --num_res_blocks_in_bottleneck 3 \
+    --num_res_blocks_in_bottleneck 4 \
     --norm_2d "group" \
     --stem_kernel 5 \
     --head_kernel 5 \
