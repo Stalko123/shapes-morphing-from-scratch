@@ -225,6 +225,23 @@ p.add_argument(
     type=int,
     help="Convolution kernel size of the last hidden-layer."
 )
+p.add_argument(
+    '--attn_stages',
+    default=(False, True, True),
+    type=lambda s: tuple(map(bool, s.split(","))),
+    help="Where to use attention (comma-separated), e.g. 'False,True,True'."
+)
+p.add_argument(
+    '--attn_num_heads',
+    default=4,
+    type=int,
+    help="Number of attention heads per block."
+)
+p.add_argument(
+    '--attn_in_bottleneck',
+    action='store_true',
+    help='Use attention in bottleneck.'
+)
 
 # --------------------------------------------------------------------------------------
 # Shared knobs
