@@ -48,9 +48,20 @@ p.add_argument(
     help='Frames per second for generated GIFs/videos.'
 )
 p.add_argument(
+    '--seed',
+    default=42,
+    type=int,
+    help='Seed for the randomness of the Visualizer.'
+)
+p.add_argument(
     '--viz_noising',
     action='store_true',
     help='Flag to visualize a noising process.'
+)
+p.add_argument(
+    '--viz_progressive_denoising',
+    action='store_true',
+    help='Flag to visualize a denoising process.'
 )
 p.add_argument(
     '--viz_denoising_from_t',

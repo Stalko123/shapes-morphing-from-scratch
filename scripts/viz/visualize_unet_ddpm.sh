@@ -7,4 +7,5 @@ python utils/viz/visualizer.py \
     --fps 10 \
     --generate_gifs 1 \
     --viz_noising \
+    --viz_progressive_denoising \
     --viz_denoising_from_t 100,400,700,1000 \

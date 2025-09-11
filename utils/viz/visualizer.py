@@ -8,8 +8,9 @@ import numpy as np
 from tqdm import tqdm
 import torch
 import random
-from typing import List, Optional, Sequence, Union
+from typing import List, Sequence, Union, Optional
 import matplotlib.pyplot as plt
+import imageio
 
 
 class Visualizer:
@@ -20,8 +21,17 @@ class Visualizer:
         self.output_dir = args.output_dir
         self.dataset = args.dataset
         self.t_max = args.t_max
+
+        self.seed = args.seed
+        random.seed(self.seed)
+        np.random.seed(self.seed)
+        torch.manual_seed(self.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(self.seed)
+
         self.generate_gifs = args.generate_gifs
         self.viz_noising = getattr(args, "viz_noising", False)
+        self.viz_progressive_denoising = getattr(args, "viz_progressive_denoising", False)
         self.viz_denoising_from_t = getattr(args, "viz_denoising_from_t", 0)
         self.main()
 
@@ -42,6 +52,28 @@ class Visualizer:
         img = img.numpy()
         img = (img * 255).astype(np.uint8)
         return img
+    
+    
+    @staticmethod
+    def _compose_side_by_side(
+            left: np.ndarray, right: np.ndarray,
+            pad: int = 8, bg=0
+        ) -> Image.Image:
+            """
+            Compose two HxWx3 uint8 images side-by-side with titles above each.
+            """
+
+            H = max(left.shape[0], right.shape[0])
+            W = left.shape[1] + pad + right.shape[1]
+            canvas = Image.new("RGB", (W, H), color=bg)
+
+            # Paste images under titles
+            left_img = Image.fromarray(left)
+            right_img = Image.fromarray(right)
+            canvas.paste(left_img, (0, 0))
+            canvas.paste(right_img, (left.shape[1] + pad, 0))
+            return canvas
+    
 
     def get_random_image(self):
         idx = random.randint(0, len(self.dataset) - 1)
@@ -75,18 +107,19 @@ class Visualizer:
         )
 
 
-    def generate_gif(self, n_gifs: int) -> None:
-        for i in tqdm(range(n_gifs)):
+    def generate_gif(self, n_gifs: int, save_path: str = None) -> None:
+        for i in tqdm(range(n_gifs), desc="Generating new samples"):
             frames = self.ddpm.generate_one_sample(return_intermediates=True)
-            self.save_gif(frames, f"{self.output_dir}/generated_sample_{i}.gif")
-        print(f"Saved the gifs to {self.output_dir}")
+            save_path = save_path or f"{self.output_dir}/generated_sample_{i}.gif"
+            self.save_gif(frames, save_path)
+        print(f"Saved the gifs to {save_path}")
 
 
-    def visualize_noising(self, save: bool = True, return_images: bool = False) -> Optional[List[torch.Tensor]]:
-        """Visualize forward diffusion (x_t) on a random training image as a GIF.
+    def visualize_noising(self, save=True, save_path: str = None, return_images: bool = False) -> Optional[List[torch.Tensor]]:
+        """
+        Visualize forward diffusion (x_t) on a random training image as a GIF.
 
-        Picks a random image from the next batch of the training dataloader, then
-        constructs frames:
+        Picks a random image from the dataset, then constructs frames:
             x_t = sqrt(alphas_bar[t]) * x_0 + sqrt(1 - alphas_bar[t]) * ε
         using a single fixed ε ~ N(0, I) so the noise progressively increases in the
         same direction—this yields a smooth "gradual destruction" visualization.
@@ -99,24 +132,111 @@ class Visualizer:
             frames: Optional list of tensors [C, H, W] for each timestep (including the
                 clean image as the first frame). Returned only if `return_images=True`.
         """
+        # pick one random training image
         image = self.get_random_image()
 
+        # list of intermediate frames (start with clean image)
         frames: List[torch.Tensor] = [image]
+
+        # fixed white noise for the whole trajectory
         white_noise = torch.randn_like(image)
 
-        for t in tqdm(range(self.t_max)):
+        for t in tqdm(range(self.t_max), desc="Forward noising"):
+            alpha_bar_t = self.ddpm.alphas_bar[t]
             image_noisy = (
-                torch.sqrt(self.ddpm.alphas_bar[t]) * image
-                + torch.sqrt(1 - self.ddpm.alphas_bar[t]) * white_noise
+                torch.sqrt(alpha_bar_t) * image +
+                torch.sqrt(1 - alpha_bar_t) * white_noise
             )
             frames.append(image_noisy)
 
         if save:
-            self.save_gif(frames=frames, path=f"{self.output_dir}/noising.gif")
+            save_path = save_path or f"{self.output_dir}/noising.gif"
+            self.save_gif(frames=frames, path=save_path)
+
         if return_images:
             return frames
         return None
-    
+
+
+    def visualize_progressive_denoising(
+        self,
+        start_with_training_image: bool = True,
+        save_path: str = None,
+        num_steps: int = None,
+        save_mp4: bool = False,
+        scale: int = 10,
+    ) -> List[torch.Tensor]:
+        """
+        Generate a GIF/MP4 showing reverse denoising vs ground-truth noising.
+        Left = denoising trajectory (x_t), Right = ground-truth noisy images (x_t).
+        """
+
+
+        device = next(self.ddpm.denoiser.parameters()).device
+        num_steps = num_steps or self.t_max
+
+        # gt trajectory (x_0 -> x_T)
+        gt_frames = None
+        if start_with_training_image:
+            gt_frames = self.visualize_noising(save=False, return_images=True)
+            gt_frames = list(reversed(gt_frames))  # reverse so x_T is first
+            x = gt_frames[0].unsqueeze(0).to(device)  # start denoising from x_T
+        else:
+            x = torch.randn((1, *self.ddpm.image_shape), device=device)
+
+        denoise_frames: List[torch.Tensor] = []
+        x_states: List[torch.Tensor] = []  # record x_t trajectory
+        self.ddpm.denoiser.eval()
+        with torch.no_grad():
+            for t in tqdm(reversed(range(num_steps)), desc="Progressive denoising"):
+                t_tensor = torch.full((1,), t, device=device, dtype=torch.long)
+
+                eps_pred = self.ddpm.denoiser(x, t_tensor)
+                alpha_bar_t = self.ddpm.alphas_bar[t].to(device).view(1, 1, 1, 1)
+                x0_hat = (x - torch.sqrt(1 - alpha_bar_t) * eps_pred) / torch.sqrt(alpha_bar_t)
+
+                # record current state and prediction
+                x_states.append(x.squeeze(0).cpu())
+                denoise_frames.append(x0_hat.squeeze(0).cpu())
+
+                if t > 0:
+                    beta_t = (1 - self.ddpm.alphas[t]).to(device)
+                    noise = torch.randn_like(x)
+                    x = torch.sqrt(alpha_bar_t) * x0_hat + torch.sqrt(beta_t) * noise
+                else:
+                    x = x0_hat
+
+        combined_frames = []
+        for i, x_state in enumerate(x_states):
+            left_arr = Visualizer.to_vis(x_state)
+            if gt_frames is not None:
+                right_arr = Visualizer.to_vis(gt_frames[i])
+                frame_img = Visualizer._compose_side_by_side(left_arr, right_arr, pad=6, bg=0)
+            else:
+                frame_img = Image.fromarray(left_arr)
+
+            frame_img = frame_img.resize((frame_img.width * scale, frame_img.height * scale), Image.NEAREST)
+            combined_frames.append(frame_img)
+
+        save_path = save_path or f"{self.output_dir}/progressive_denoising.gif"
+        combined_frames[0].save(
+            save_path,
+            format="GIF",
+            save_all=True,
+            append_images=combined_frames[1:],
+            duration=[max(20, int(round(1000.0 / float(self.fps))))] * len(combined_frames),
+            loop=0,
+            disposal=2,
+            optimize=False,
+        )
+
+        if save_mp4:
+            mp4_path = save_path.replace(".gif", ".mp4")
+            imageio.mimsave(mp4_path, [np.array(f) for f in combined_frames], fps=self.fps)
+
+        print(f"Saved progressive denoising comparison to {save_path}")
+        return denoise_frames
+
 
     def visualize_denoising_from_t(self, t: Union[int, Sequence[int]]) -> None:
         """
@@ -168,13 +288,16 @@ class Visualizer:
                 ax.set_title(title)
                 ax.axis("off")
 
-            fig.savefig(f"{self.output_dir}/denoising_from_time{time}.png", dpi=150, bbox_inches="tight")
+            save_path = f"{self.output_dir}/denoising_from_time{time}.png"
+            fig.savefig(save_path, dpi=150, bbox_inches="tight")
             plt.close(fig)
-            
+
 
     def main(self):
         if self.viz_noising:
             self.visualize_noising()
+        if self.viz_progressive_denoising:
+            self.visualize_progressive_denoising()
         if self.generate_gifs != 0:
             self.generate_gif(self.generate_gifs)
         if self.viz_denoising_from_t != 0:
