@@ -40,3 +40,6 @@ python trainers/trainer.py \
     --checkpoint_dir "./checkpoints" \
     --save_frequency 100 \
     --output_dir "./outputs" \
+    --attn_stages false,false,false,true,true \
+    --attn_num_heads 4 \
+    --attn_in_bottleneck \

@@ -1,4 +1,5 @@
 import configargparse
+from ..str2bool import str2bool
 
 p = configargparse.ArgParser(
     description="Training and evaluation config for DDPM denoisers (MLP/CNN/U-Net)."
@@ -224,6 +225,23 @@ p.add_argument(
     default=5,
     type=int,
     help="Convolution kernel size of the last hidden-layer."
+)
+p.add_argument(
+    '--attn_stages',
+    default=(False, True, True),
+    type=lambda s: tuple(str2bool(x) for x in s.split(",")),
+    help="Where to use attention (comma-separated), e.g. 'False,True,True'."
+)
+p.add_argument(
+    '--attn_num_heads',
+    default=4,
+    type=int,
+    help="Number of attention heads per block."
+)
+p.add_argument(
+    '--attn_in_bottleneck',
+    action='store_true',
+    help='Use attention in bottleneck.'
 )
 
 # --------------------------------------------------------------------------------------

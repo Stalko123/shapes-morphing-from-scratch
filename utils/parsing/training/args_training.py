@@ -88,15 +88,18 @@ class TrainingArgs:
         # U-Net / CNN-specific
         # ---------------------------
         self.base_channels: int = args_parsed.base_channels
-        self.channel_mults = args_parsed.channel_mults              # tuple[int,...]
-        self.num_res_blocks = args_parsed.num_res_blocks            # int
-        self.upsample: str = args_parsed.upsample                   # "convtranspose" | "nearest_conv"
-        self.groups: int = args_parsed.groups                       # GroupNorm groups
+        self.channel_mults = args_parsed.channel_mults                  # tuple[int,...]
+        self.num_res_blocks = args_parsed.num_res_blocks                # int
+        self.upsample: str = args_parsed.upsample                       # "convtranspose" | "nearest_conv"
+        self.groups: int = args_parsed.groups                           # GroupNorm groups
         self.num_res_blocks_in_bottleneck: int = args_parsed.num_res_blocks_in_bottleneck
-        self.norm_2d: str = args_parsed.norm_2d                     # normalization method used
-        self.stem_kernel: int = args_parsed.stem_kernel             # kernel size of the stem layer
-        self.head_kernel: int = args_parsed.head_kernel             # kernel size of the head layer
-        self.downsample: str = args_parsed.downsample               # "stride" | "pool" | "avgpool"
+        self.norm_2d: str = args_parsed.norm_2d                         # normalization method used
+        self.stem_kernel: int = args_parsed.stem_kernel                 # kernel size of the stem layer
+        self.head_kernel: int = args_parsed.head_kernel                 # kernel size of the head layer
+        self.downsample: str = args_parsed.downsample                   # "stride" | "pool" | "avgpool"
+        self.attn_stages = args_parsed.attn_stages                      # stages to use attention (list/tuple of booleans)
+        self.attn_num_heads = args_parsed.attn_num_heads                # number of attention heads per attention block
+        self.attn_in_bottleneck: bool = args_parsed.attn_in_bottleneck  # use attention in bottleneck ?
 
         # ---------------------------
         # Logging / checkpoints / outputs
@@ -152,6 +155,9 @@ class TrainingArgs:
                 time_output_dim=self.time_output_dim,
                 time_hidden=self.time_hidden,
                 dropout=self.dropout,
+                attn_stages=self.attn_stages,
+                attn_num_heads=self.attn_num_heads,
+                attn_in_bottleneck=self.attn_in_bottleneck
             )
 
         else:

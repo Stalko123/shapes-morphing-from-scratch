@@ -4,6 +4,7 @@ from typing import Sequence, Tuple, Union, Literal
 from utils.model_utils.getters import get_activation, get_norm2d
 from utils.model_utils.init_utils import init
 from utils.model_utils.time_embedding import TimeEmbed
+from .attention2d import Attention2d
 from .resblock import ResBlock
 from .downsample import Downsample
 from .upsample import Upsample
@@ -35,7 +36,10 @@ class DenoiserUNet(nn.Module):
         time_output_dim: int = 256,                                             # time embedding output dim
         time_hidden: int = 512,                                                 # time MLP hidden
         dropout: float = 0.0,                                                   # dropout inside resblocks
-        init_scheme: str = "auto"
+        init_scheme: str = "auto",                                              # weight initialization scheme
+        attn_stages: Sequence[bool] = None,                                     # where to use attention
+        attn_num_heads: int = 4,                                                # number of attention heads
+        attn_in_bottleneck: bool = True,                                        # use attention in bottleneck
     ):
         super().__init__()
         C, _, _ = img_shape
@@ -48,6 +52,8 @@ class DenoiserUNet(nn.Module):
         self.stem_kernel = stem_kernel
         self.head_kernel = head_kernel
         self.init_scheme = init_scheme
+        self.attn_num_heads = attn_num_heads
+        self.attn_in_bottleneck = attn_in_bottleneck
 
         # normalize configs
         S = len(channel_mults)
@@ -55,6 +61,16 @@ class DenoiserUNet(nn.Module):
             num_res_blocks = [num_res_blocks] * S
         assert len(num_res_blocks) == S
         assert stem_kernel % 2 == 1 and head_kernel % 2 == 1, "DenoiserUNet error : choose odd kernel sizes"
+
+        if attn_stages is None:
+            # default : attention on the last 1-2 (lowest-res) stages
+            attn_stages = [False] * S
+            if S >= 1:
+                attn_stages[-1] = True
+            if S >= 2:
+                attn_stages[-2] = True
+        assert len(attn_stages) == S
+        self.attn_stages = attn_stages
 
         # time embedding
         self.time_base_dim = time_base_dim
@@ -82,16 +98,24 @@ class DenoiserUNet(nn.Module):
             # residual stack
             for _ in range(num_res_blocks[s]):
                 enc_blocks.append(ResBlock(ch, ch, norm, activation, groups, time_dim=time_output_dim, dropout=dropout))
-            enc_channels.append(ch)  # save for skip
+
+            if self.attn_stages[s]:
+                enc_blocks.append(Attention2d(ch, num_heads=self.attn_num_heads, norm=norm, groups=groups))
+
+            enc_channels.append(ch)
+
             # downsample except last stage
             if s < S - 1:
                 enc_blocks.append(Downsample(ch, method=downsample))
+
         self.encoder = enc_blocks
 
         # bottleneck
         self.bottleneck = nn.ModuleList()
         for _ in range(num_res_blocks_in_bottleneck):
             self.bottleneck.append(ResBlock(ch, ch, norm, activation, groups, time_dim=time_output_dim, dropout=dropout))
+        if self.attn_in_bottleneck:
+            self.bottleneck.append(Attention2d(ch, num_heads=self.attn_num_heads, norm=norm, groups=groups))
 
         # decoder
         dec_blocks = nn.ModuleList()
@@ -106,6 +130,8 @@ class DenoiserUNet(nn.Module):
             # residual stack
             for _ in range(num_res_blocks[s]):
                 dec_blocks.append(ResBlock(ch, ch, norm, activation, groups, time_dim=time_output_dim, dropout=dropout))
+            if self.attn_stages[s]:
+                dec_blocks.append(Attention2d(ch, num_heads=self.attn_num_heads, norm=norm, groups=groups))
         self.decoder = dec_blocks
 
         # output head
@@ -121,7 +147,9 @@ class DenoiserUNet(nn.Module):
         nonlin = "relu" if act in ("relu", "gelu", "silu", "swish") else ("tanh" if act == "tanh" else "linear")
         for m in self.modules():
             init(m, self.init_scheme, nonlin)
-
+    
+    def _is_stage_block(self, m: nn.Module) -> bool:
+        return isinstance(m, (ResBlock, Attention2d))
     
     def forward(self, x_t: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """
@@ -139,14 +167,11 @@ class DenoiserUNet(nn.Module):
         i = 0
         while i < len(self.encoder):
             block = self.encoder[i]
-            if isinstance(block, ResBlock):
-                h = block(h, t_emb)
-                i += 1
-                # keep consuming consecutive resblocks until a downsample or next stage
-                while i < len(self.encoder) and isinstance(self.encoder[i], ResBlock):
-                    h = self.encoder[i](h, t_emb)
+            if self._is_stage_block(block):
+                while i < len(self.encoder) and self._is_stage_block(self.encoder[i]):
+                    m = self.encoder[i]
+                    h = m(h, t_emb) if isinstance(m, ResBlock) else m(h)
                     i += 1
-                # end of stage; save skip before optional Downsample
                 skips.append(h)
                 if i < len(self.encoder) and isinstance(self.encoder[i], Downsample):
                     h = self.encoder[i](h)
@@ -157,7 +182,7 @@ class DenoiserUNet(nn.Module):
 
         # bottleneck
         for block in self.bottleneck:
-            h = block(h, t_emb)
+            h = block(h, t_emb) if isinstance(block, ResBlock) else block(h)
 
         # decoder pass
         j = 0
@@ -175,8 +200,9 @@ class DenoiserUNet(nn.Module):
             h = self.decoder[j](h)  # 1x1 mixer
             j += 1
             # residual stack at this stage
-            while j < len(self.decoder) and isinstance(self.decoder[j], ResBlock):
-                h = self.decoder[j](h, t_emb)
+            while j < len(self.decoder) and self._is_stage_block(self.decoder[j]):
+                m = self.decoder[j]
+                h = m(h, t_emb) if isinstance(m, ResBlock) else m(h)
                 j += 1
 
         # head
