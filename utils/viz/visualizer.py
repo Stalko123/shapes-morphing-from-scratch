@@ -8,7 +8,8 @@ import numpy as np
 from tqdm import tqdm
 import torch
 import random
-from typing import List, Optional
+from typing import List, Optional, Sequence, Union
+import matplotlib.pyplot as plt
 
 
 class Visualizer:
@@ -20,9 +21,27 @@ class Visualizer:
         self.dataset = args.dataset
         self.t_max = args.t_max
         self.generate_gifs = args.generate_gifs
-        self.viz_noising = getattr(args, "visualize_noising", False)
+        self.viz_noising = getattr(args, "viz_noising", False)
+        self.viz_denoising_from_t = getattr(args, "viz_denoising_from_t", 0)
         self.main()
 
+    @staticmethod
+    def to_vis(img: torch.Tensor) -> np.ndarray:
+        # Converts to CPU [H,W,C] in [0,255]
+        img = img.detach().float().cpu()
+        if img.dim() == 4:
+            img = img[0]
+        if img.min() < 0:
+            img = (img.clamp(-1, 1) + 1) / 2
+        else:
+            img = img.clamp(0, 1)
+        if img.size(0) == 3:                  # CHW -> HWC
+            img = img.permute(1, 2, 0)
+        elif img.size(0) == 1:
+            img = img[0] # HW
+        img = img.numpy()
+        img = (img * 255).astype(np.uint8)
+        return img
 
     def get_random_image(self):
         idx = random.randint(0, len(self.dataset) - 1)
@@ -34,32 +53,15 @@ class Visualizer:
         return sample
 
 
-    def save_gif(self, frames: List[torch.Tensor], path: str) -> None:
+    def save_gif(self, frames: Sequence[torch.Tensor], path: str, scale: int = 10) -> None:
         pil_frames = []
         for f in frames:
-            # ensure CPU tensor for numpy conversion
-            f = f.detach().cpu()
-
-            # map [-1, 1] -> [0, 1] if needed
-            if float(f.min()) < 0:
-                f = 0.5 * f + 0.5
-
-            f = f.clamp(0, 1)
-            C, _, _ = f.shape
-            arr = f.numpy()
-
-            if C == 1:
-                arr = (arr[0] * 255).astype(np.uint8)                 # [H, W]
-                pil = Image.fromarray(arr)                            # 'L'
-            elif C == 3:
-                arr = (arr.transpose(1, 2, 0) * 255).astype(np.uint8) # [H, W, 3]
-                pil = Image.fromarray(arr)                            # 'RGB'
-            else:
-                raise ValueError(f"Unsupported channels: {C}")
-
-            pil_frames.append(pil)
-
-        # GIF viewers often clamp minimum frame duration to ~20ms
+            img = Image.fromarray(Visualizer.to_vis(f))
+            img = img.resize(
+                (img.width * scale, img.height * scale), 
+                resample=Image.NEAREST
+            )
+            pil_frames.append(img)
         duration_ms = max(20, int(round(1000.0 / float(self.fps))))
         pil_frames[0].save(
             path,
@@ -116,15 +118,67 @@ class Visualizer:
         return None
     
 
-    def visualize_denoising_from_t(self, t: int) -> None:
-        pass
+    def visualize_denoising_from_t(self, t: Union[int, Sequence[int]]) -> None:
+        """
+        Loads a random image from the training set, applies t noising steps to it,
+        runs the model to predict the noise, reconstructs x0, and shows the result.
+        """
+        if type(t) == int:
+            t = [t]
 
+        for time in t: 
+            try:
+                device = next(self.ddpm.denoiser.parameters()).device  # type: ignore[attr-defined]
+            except Exception:
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+            if time > self.t_max:
+                print(f"Warning: time {time} is greater than t_max {self.t_max} and will be clamped.")
+            if time < 0:
+                print(f"Warning: time {time} is negative and will be clamped to 0.")
+            time = max(0, min(int(time), int(self.t_max)))
+
+            image = self.get_random_image()                 # tensor [C,H,W]
+            x = image.unsqueeze(0).to(device)
+            
+            t_tensor = torch.full((x.size(0),), time, dtype=torch.long, device=device)
+
+            self.ddpm.denoiser.eval()
+            with torch.no_grad():
+                x_noisy, _ = self.ddpm.blurData(x, t_tensor)  # both [1,C,H,W]
+                eps_pred = self.ddpm.denoiser(x_noisy, t_tensor) # [1,C,H,W]
+                alpha_bar_t = self.ddpm.alphas_bar[time].view(1, *([1] * (x.ndim - 1)))
+                x0_hat = (x_noisy - torch.sqrt(1 - alpha_bar_t) * eps_pred) / torch.sqrt(alpha_bar_t)
+
+            orig_vis = Visualizer.to_vis(x)
+            noisy_vis = Visualizer.to_vis(x_noisy)
+            denoised_vis = Visualizer.to_vis(x0_hat)
+
+            fig, axes = plt.subplots(ncols=3, figsize=(15, 5), constrained_layout=True)
+
+            for ax, (title, im) in zip(
+                axes,
+                [
+                    ("Original", orig_vis),
+                    (f"Noisy (t={time})", noisy_vis),
+                    ("Denoised (x̂₀)", denoised_vis),
+                ],
+            ):
+                ax.imshow(im.squeeze() if im.shape[-1] == 1 else im)
+                ax.set_title(title)
+                ax.axis("off")
+
+            fig.savefig(f"{self.output_dir}/denoising_from_time{time}.png", dpi=150, bbox_inches="tight")
+            plt.close(fig)
+            
 
     def main(self):
         if self.viz_noising:
             self.visualize_noising()
         if self.generate_gifs != 0:
             self.generate_gif(self.generate_gifs)
+        if self.viz_denoising_from_t != 0:
+            self.visualize_denoising_from_t(self.viz_denoising_from_t)
 
 
 if __name__ == "__main__":

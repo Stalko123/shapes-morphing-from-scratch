@@ -32,7 +32,8 @@ class InferenceArgs:
         # Viz
         # ---------------------------
         self.fps = args_parsed.fps
-        self.visualize_noising = args_parsed.visualize_noising
+        self.viz_noising = args_parsed.viz_noising
+        self.viz_denoising_from_t = args_parsed.viz_denoising_from_t
         self.generate_gifs = args_parsed.generate_gifs
 
         # Paths :
