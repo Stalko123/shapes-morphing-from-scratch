@@ -43,7 +43,11 @@ class Trainer:
 
         # Optimizer
         self.optimizer = args.optimizer
-
+        # Gradient accumulation
+        self.grad_accum = int(getattr(args, "grad_accum", 1))
+        self._accum_counter = 0
+        self._last_stepped = False
+     
         # Logging
         self.verbose = int(getattr(args, "verbose", 1))  # 0: quiet, 1: epoch logs + tqdm
         # Write TensorBoard logs under the version folder alongside checkpoints
@@ -77,21 +81,33 @@ class Trainer:
             print(f"[Trainer] Train batches: {len(self.train_loader)}"
                   + (f" | Val batches: {len(self.val_loader)}" if self.has_val else "")
                   + (f" | Test batches: {len(self.test_loader)}" if self.has_test else ""))
-            print(f"[Trainer] AMP: {self.use_amp} | EarlyStopping: {self.use_early_stopping} (patience={self.patience})")
+            print(f"[Trainer] AMP: {self.use_amp} | GradAccum: x{self.grad_accum} | EarlyStopping: {self.use_early_stopping} (patience={self.patience})")
 
     # Steps
 
     def train_step(self, batch) -> float:
-        self.optimizer.zero_grad(set_to_none=True)
+        # Zero gradients only at the start of an accumulation window
+        if self._accum_counter == 0:
+            self.optimizer.zero_grad(set_to_none=True)
         x, _ = _to_device(batch, self.device)
         with torch.amp.autocast(enabled=self.use_amp, device_type=x.device.type):
             loss = self.ddpm.computeLoss(x)
-        self.scaler.scale(loss).backward()
-        if self.grad_clip > 0:
-            self.scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(self.denoiser.parameters(), self.grad_clip)
-        self.scaler.step(self.optimizer)
-        self.scaler.update()
+        # Scale loss for accumulation to keep gradient magnitude consistent
+        scaled_loss = loss / max(1, self.grad_accum)
+        self.scaler.scale(scaled_loss).backward()
+
+        # Update accumulation counter and perform optimizer step conditionally
+        self._accum_counter += 1
+        self._last_stepped = False
+        if self._accum_counter >= self.grad_accum:
+            if self.grad_clip > 0:
+                self.scaler.unscale_(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(self.denoiser.parameters(), self.grad_clip)
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+            self.optimizer.zero_grad(set_to_none=True)
+            self._accum_counter = 0
+            self._last_stepped = True
         return float(loss.detach().cpu().item())
 
     @torch.no_grad()
@@ -124,8 +140,21 @@ class Trainer:
                 if self.writer:
                     self.writer.add_scalar("loss/train_step", loss, self.global_step)
 
-                pbar.set_postfix(train_loss=f"{loss:.6f}")
+                # Show accumulation status in progress bar
+                accum_status = f"{self._accum_counter}/{self.grad_accum}" if self.grad_accum > 1 else "1/1"
+                stepped = "✓" if self._last_stepped else "·"
+                pbar.set_postfix(train_loss=f"{loss:.6f}", accum=accum_status, step=stepped)
                 self.global_step += 1
+
+            # Flush any remaining accumulated gradients at epoch end
+            if self._accum_counter != 0:
+                if self.grad_clip > 0:
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.denoiser.parameters(), self.grad_clip)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+                self.optimizer.zero_grad(set_to_none=True)
+                self._accum_counter = 0
 
             train_loss = float(np.mean(epoch_losses)) if epoch_losses else float("nan")
             if self.writer:

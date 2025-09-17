@@ -68,6 +68,7 @@ class TrainingArgs:
         self.grad_clip: float = args_parsed.grad_clip
         self.patience: int = args_parsed.patience
         self.use_amp: bool = args_parsed.use_amp
+        self.grad_accum: int = args_parsed.grad_accum
 
         # ---------------------------
         # Model-shared knobs

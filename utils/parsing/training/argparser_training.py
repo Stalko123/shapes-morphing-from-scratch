@@ -136,6 +136,13 @@ p.add_argument(
     help="Number of epochs without improvement before early-stopping (0 disables)."
 )
 
+p.add_argument(
+    '--grad_accum',
+    default=1,
+    type=int,
+    help='Number of gradient accumulation steps (simulates larger batch sizes).'
+)
+
 # --------------------------------------------------------------------------------------
 # MLP-specific (ignored if model != MLP)
 # --------------------------------------------------------------------------------------
