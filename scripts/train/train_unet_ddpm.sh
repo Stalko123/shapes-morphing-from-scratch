@@ -2,7 +2,7 @@
 
 # Training script for DDPM shapes morphing
 # Run with: bash train.sh
-
+export PYTHONPATH=$(pwd)
 python trainers/trainer.py \
     --t_max 1000 \
     --n_epochs 1000 \
@@ -43,3 +43,4 @@ python trainers/trainer.py \
     --attn_stages false,false,false,true,true \
     --attn_num_heads 4 \
     --attn_in_bottleneck \
+    --grad_accum 4 \
