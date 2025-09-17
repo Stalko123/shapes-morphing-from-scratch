@@ -43,7 +43,9 @@ class Trainer:
 
         # Optimizer
         self.optimizer = args.optimizer
-
+        # Gradient accumulation
+        self.grad_accum = int(getattr(args, "grad_accum", 1))
+     
         # Logging
         self.verbose = int(getattr(args, "verbose", 1))  # 0: quiet, 1: epoch logs + tqdm
         # Write TensorBoard logs under the version folder alongside checkpoints
