@@ -48,6 +48,10 @@ class Loader:
             apply_aug=apply_aug
         )
 
+        # default shuffle behavior: True for train, False otherwise if not explicitly provided
+        if shuffle is None:
+            shuffle = (split == "train" or split == "train+val")
+
         # pick adapter
         adapter = ADAPTERS.get(name, _adapter_generic(name))
         if split == "train" :
@@ -80,7 +84,7 @@ class Loader:
             self.dataloader_val = DataLoader(
                 self.dataset_val,
                 batch_size=batch_size,
-                shuffle=shuffle,
+                shuffle=False,
                 num_workers=num_workers,
                 drop_last=drop_last,
                 pin_memory=pin_memory,
