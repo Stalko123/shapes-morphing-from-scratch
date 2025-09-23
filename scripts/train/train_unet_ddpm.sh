@@ -11,27 +11,26 @@ python trainers/trainer.py \
     --verbose \
     --model "u-net" \
     --dataset_name "CIFAR10" \
-    --batch_size 128 \
+    --batch_size 64 \
     --num_workers 8 \
     --validation \
     --test \
     --val_ratio 0.01 \
     --seed 42 \
     --num_trials 1 \
-    --learning_rate 1e-4 \
-    --dropout 0.0 \
+    --learning_rate 5e-5 \
+    --dropout 0.1 \
     --optimizer_name "Adam" \
-    --grad_clip 1.0 \
+    --grad_clip 0.5 \
     --patience 800 \
-    --use_amp \
     --activation "silu" \
     --time_base_dim 128 \
     --time_hidden 512 \
     --time_output_dim 512 \
     --init_scheme "auto" \
-    --base_channels 128 \
-    --channel_mults 1,2,4,8 \
-    --num_res_blocks 3 \
+    --base_channels 64 \
+    --channel_mults 1,2,4,4 \
+    --num_res_blocks 2 \
     --upsample "nearest_conv" \
     --groups 32 \
     --num_res_blocks_in_bottleneck 3 \
@@ -43,7 +42,7 @@ python trainers/trainer.py \
     --checkpoint_dir "./checkpoints" \
     --save_frequency 25 \
     --output_dir "./outputs" \
-    --attn_stages False,False,True,True \
-    --attn_num_heads 8 \
+    --attn_stages False,False,False,True \
+    --attn_num_heads 4 \
     --attn_in_bottleneck \
     --grad_accum 1 \
