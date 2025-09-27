@@ -24,17 +24,27 @@ def create_scheduler_plots():
     
     print("Génération des visualisations des schedulers...")
     
-    # 1. StepLR Scheduler
+    # 1. StepLR Scheduler (with and without min_lr)
     print("1. Générant StepLR scheduler...")
     step_size = 20
     gamma = 0.5
-    lr_step = []
-    current_lr = initial_lr
+    min_lr = 1e-5
     
+    # Classic StepLR
+    lr_step_classic = []
+    current_lr_classic = initial_lr
     for epoch in epochs:
         if (epoch - 1) % step_size == 0 and epoch > 1:
-            current_lr *= gamma
-        lr_step.append(current_lr)
+            current_lr_classic *= gamma
+        lr_step_classic.append(current_lr_classic)
+    
+    # StepLR with minimum limit
+    lr_step_limited = []
+    current_lr_limited = initial_lr
+    for epoch in epochs:
+        if (epoch - 1) % step_size == 0 and epoch > 1:
+            current_lr_limited = max(current_lr_limited * gamma, min_lr)
+        lr_step_limited.append(current_lr_limited)
     
     plt.figure(figsize=fig_size)
     plt.plot(epochs, lr_step, 'b-', linewidth=3, label='StepLR')

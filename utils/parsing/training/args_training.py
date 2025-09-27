@@ -8,6 +8,38 @@ import yaml
 import datetime
 import math
 
+
+class StepLRWithMinLR(torch.optim.lr_scheduler._LRScheduler):
+    """
+    StepLR scheduler with minimum learning rate threshold.
+    Prevents learning rate from going below a specified minimum value.
+    """
+    
+    def __init__(self, optimizer, step_size, gamma=0.1, min_lr=1e-7, last_epoch=-1, verbose=False):
+        self.step_size = step_size
+        self.gamma = gamma
+        self.min_lr = min_lr
+        super(StepLRWithMinLR, self).__init__(optimizer, last_epoch, verbose)
+    
+    def get_lr(self):
+        if not self._get_lr_called_within_step:
+            import warnings
+            warnings.warn("To get the last learning rate computed by the scheduler, "
+                         "please use `get_last_lr()`.", UserWarning)
+        
+        # Calculate step decay
+        if (self.last_epoch == 0) or (self.last_epoch % self.step_size != 0):
+            return [group['lr'] for group in self.optimizer.param_groups]
+        
+        # Apply decay but respect minimum LR
+        return [max(group['lr'] * self.gamma, self.min_lr) 
+                for group in self.optimizer.param_groups]
+    
+    def _get_closed_form_lr(self):
+        # Closed form calculation respecting minimum LR
+        return [max(base_lr * self.gamma ** (self.last_epoch // self.step_size), self.min_lr)
+                for base_lr in self.base_lrs]
+
 class TrainingArgs:
     def __init__(self, args_parsed):
 
@@ -80,6 +112,7 @@ class TrainingArgs:
         self.scheduler_eta_min: float = args_parsed.scheduler_eta_min
         self.scheduler_t_0: int = args_parsed.scheduler_t_0
         self.scheduler_t_mult: int = args_parsed.scheduler_t_mult
+        self.scheduler_min_lr: float = args_parsed.scheduler_min_lr
 
         # ---------------------------
         # Model-shared knobs
@@ -199,10 +232,12 @@ class TrainingArgs:
         if self.scheduler_name.lower() == "none":
             return None
         elif self.scheduler_name.lower() == "step":
-            return torch.optim.lr_scheduler.StepLR(
+            # Use custom StepLR with minimum LR limit
+            return StepLRWithMinLR(
                 self.optimizer, 
                 step_size=self.scheduler_step_size, 
-                gamma=self.scheduler_gamma
+                gamma=self.scheduler_gamma,
+                min_lr=self.scheduler_min_lr
             )
         elif self.scheduler_name.lower() == "exponential":
             return torch.optim.lr_scheduler.ExponentialLR(

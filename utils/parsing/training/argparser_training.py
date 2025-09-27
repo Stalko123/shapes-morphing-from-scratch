@@ -189,6 +189,12 @@ p.add_argument(
     type=int,
     help='A factor increases T_i after a restart in CosineAnnealingWarmRestarts.'
 )
+p.add_argument(
+    '--scheduler_min_lr',
+    default=1e-7,
+    type=float,
+    help='Minimum learning rate threshold for schedulers (prevents LR from becoming too small).'
+)
 
 # --------------------------------------------------------------------------------------
 # MLP-specific (ignored if model != MLP)
