@@ -19,23 +19,9 @@ class StepLRWithMinLR(torch.optim.lr_scheduler._LRScheduler):
         self.step_size = step_size
         self.gamma = gamma
         self.min_lr = min_lr
-        super(StepLRWithMinLR, self).__init__(optimizer, last_epoch, verbose)
+        super(StepLRWithMinLR, self).__init__(optimizer, last_epoch)
     
     def get_lr(self):
-        if not self._get_lr_called_within_step:
-            import warnings
-            warnings.warn("To get the last learning rate computed by the scheduler, "
-                         "please use `get_last_lr()`.", UserWarning)
-        
-        # Calculate step decay
-        if (self.last_epoch == 0) or (self.last_epoch % self.step_size != 0):
-            return [group['lr'] for group in self.optimizer.param_groups]
-        
-        # Apply decay but respect minimum LR
-        return [max(group['lr'] * self.gamma, self.min_lr) 
-                for group in self.optimizer.param_groups]
-    
-    def _get_closed_form_lr(self):
         # Closed form calculation respecting minimum LR
         return [max(base_lr * self.gamma ** (self.last_epoch // self.step_size), self.min_lr)
                 for base_lr in self.base_lrs]
