@@ -43,6 +43,8 @@ class Trainer:
 
         # Optimizer
         self.optimizer = args.optimizer
+        # Learning rate scheduler
+        self.scheduler = getattr(args, "scheduler", None)
         # Gradient accumulation
         self.grad_accum = int(getattr(args, "grad_accum", 1))
         self._accum_counter = 0
@@ -159,6 +161,10 @@ class Trainer:
             train_loss = float(np.mean(epoch_losses)) if epoch_losses else float("nan")
             if self.writer:
                 self.writer.add_scalar("loss/train_epoch", train_loss, epoch)
+                # Log current learning rate
+                if self.scheduler is not None:
+                    current_lr = self.scheduler.get_last_lr()[0] if hasattr(self.scheduler, 'get_last_lr') else self.optimizer.param_groups[0]['lr']
+                    self.writer.add_scalar("learning_rate", current_lr, epoch)
 
             # validation
             if self.has_val:
@@ -189,6 +195,10 @@ class Trainer:
             else:
                 if self.verbose:
                     print(f"Epoch {epoch}: train={train_loss:.6f}")
+
+            # Learning rate scheduler step
+            if self.scheduler is not None:
+                self.scheduler.step()
 
             # periodic checkpoint
             if (epoch % self.save_frequency) == 0:
@@ -229,6 +239,9 @@ class Trainer:
             "best_val": getattr(self, "best_val", None),
             "best_epoch": getattr(self, "best_epoch", None),
         }
+        # Add scheduler state if scheduler exists
+        if self.scheduler is not None:
+            payload["scheduler_state_dict"] = self.scheduler.state_dict()
         if epoch == "final":
             path = os.path.join(self.checkpoint_dir, "final.pth")
         else:

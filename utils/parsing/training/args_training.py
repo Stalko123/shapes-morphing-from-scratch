@@ -71,6 +71,17 @@ class TrainingArgs:
         self.grad_accum: int = args_parsed.grad_accum
 
         # ---------------------------
+        # Learning rate scheduler
+        # ---------------------------
+        self.scheduler_name: str = args_parsed.scheduler_name
+        self.scheduler_step_size: int = args_parsed.scheduler_step_size
+        self.scheduler_gamma: float = args_parsed.scheduler_gamma
+        self.scheduler_t_max: int = args_parsed.scheduler_t_max if args_parsed.scheduler_t_max is not None else self.n_epochs
+        self.scheduler_eta_min: float = args_parsed.scheduler_eta_min
+        self.scheduler_t_0: int = args_parsed.scheduler_t_0
+        self.scheduler_t_mult: int = args_parsed.scheduler_t_mult
+
+        # ---------------------------
         # Model-shared knobs
         # ---------------------------
         self.activation: str = args_parsed.activation
@@ -176,10 +187,43 @@ class TrainingArgs:
         # Create optimizer after model is initialized
         if self.optimizer_name.lower() == 'adam':
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        
+        # Create learning rate scheduler
+        self.scheduler = self._create_scheduler()
 
         # Save hyperparameters to YAML file
         self._save_hyperparameters(args_parsed)
 
+    def _create_scheduler(self):
+        """Create learning rate scheduler based on the specified scheduler name."""
+        if self.scheduler_name.lower() == "none":
+            return None
+        elif self.scheduler_name.lower() == "step":
+            return torch.optim.lr_scheduler.StepLR(
+                self.optimizer, 
+                step_size=self.scheduler_step_size, 
+                gamma=self.scheduler_gamma
+            )
+        elif self.scheduler_name.lower() == "exponential":
+            return torch.optim.lr_scheduler.ExponentialLR(
+                self.optimizer, 
+                gamma=self.scheduler_gamma
+            )
+        elif self.scheduler_name.lower() == "cosine":
+            return torch.optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer, 
+                T_max=self.scheduler_t_max, 
+                eta_min=self.scheduler_eta_min
+            )
+        elif self.scheduler_name.lower() == "cosine_with_restarts":
+            return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+                self.optimizer, 
+                T_0=self.scheduler_t_0, 
+                T_mult=self.scheduler_t_mult, 
+                eta_min=self.scheduler_eta_min
+            )
+        else:
+            raise ValueError(f"Unknown scheduler name: {self.scheduler_name}")
 
     def _get_next_version_dir(self, exp_name, base_dir):
         """Find the next available version directory for this experiment under base_dir/exp_name."""
