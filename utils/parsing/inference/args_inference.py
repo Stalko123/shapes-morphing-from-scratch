@@ -92,6 +92,9 @@ class InferenceArgs:
                 time_output_dim=cfg['time_output_dim'],
                 time_hidden=cfg['time_hidden'],
                 dropout=cfg['dropout'],
+                attn_stages=cfg['attn_stages'],
+                attn_num_heads=cfg['attn_num_heads'],
+                attn_in_bottleneck=cfg['attn_in_bottleneck'],
             )
 
 args = InferenceArgs(args_parsed)
