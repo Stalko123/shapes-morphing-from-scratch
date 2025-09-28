@@ -144,6 +144,59 @@ p.add_argument(
 )
 
 # --------------------------------------------------------------------------------------
+# Learning rate scheduler
+# --------------------------------------------------------------------------------------
+p.add_argument(
+    '--scheduler_name',
+    default="none",
+    choices=["none", "cosine", "step", "exponential", "cosine_with_restarts"],
+    type=str,
+    help='Learning rate scheduler to use during training.'
+)
+p.add_argument(
+    '--scheduler_step_size',
+    default=30,
+    type=int,
+    help='Step size for StepLR scheduler (number of epochs between lr decay).'
+)
+p.add_argument(
+    '--scheduler_gamma',
+    default=0.1,
+    type=float,
+    help='Multiplicative factor of learning rate decay for StepLR and ExponentialLR.'
+)
+p.add_argument(
+    '--scheduler_t_max',
+    default=None,
+    type=int,
+    help='Maximum number of iterations for CosineAnnealingLR. If None, uses n_epochs.'
+)
+p.add_argument(
+    '--scheduler_eta_min',
+    default=0,
+    type=float,
+    help='Minimum learning rate for CosineAnnealingLR.'
+)
+p.add_argument(
+    '--scheduler_t_0',
+    default=10,
+    type=int,
+    help='Number of iterations for the first restart in CosineAnnealingWarmRestarts.'
+)
+p.add_argument(
+    '--scheduler_t_mult',
+    default=1,
+    type=int,
+    help='A factor increases T_i after a restart in CosineAnnealingWarmRestarts.'
+)
+p.add_argument(
+    '--scheduler_min_lr',
+    default=1e-7,
+    type=float,
+    help='Minimum learning rate threshold for schedulers (prevents LR from becoming too small).'
+)
+
+# --------------------------------------------------------------------------------------
 # MLP-specific (ignored if model != MLP)
 # --------------------------------------------------------------------------------------
 p.add_argument(

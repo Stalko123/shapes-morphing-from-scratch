@@ -8,6 +8,24 @@ import yaml
 import datetime
 import math
 
+
+class StepLRWithMinLR(torch.optim.lr_scheduler._LRScheduler):
+    """
+    StepLR scheduler with minimum learning rate threshold.
+    Prevents learning rate from going below a specified minimum value.
+    """
+    
+    def __init__(self, optimizer, step_size, gamma=0.1, min_lr=1e-7, last_epoch=-1, verbose=False):
+        self.step_size = step_size
+        self.gamma = gamma
+        self.min_lr = min_lr
+        super(StepLRWithMinLR, self).__init__(optimizer, last_epoch)
+    
+    def get_lr(self):
+        # Closed form calculation respecting minimum LR
+        return [max(base_lr * self.gamma ** (self.last_epoch // self.step_size), self.min_lr)
+                for base_lr in self.base_lrs]
+
 class TrainingArgs:
     def __init__(self, args_parsed):
 
@@ -69,6 +87,18 @@ class TrainingArgs:
         self.patience: int = args_parsed.patience
         self.use_amp: bool = args_parsed.use_amp
         self.grad_accum: int = args_parsed.grad_accum
+
+        # ---------------------------
+        # Learning rate scheduler
+        # ---------------------------
+        self.scheduler_name: str = args_parsed.scheduler_name
+        self.scheduler_step_size: int = args_parsed.scheduler_step_size
+        self.scheduler_gamma: float = args_parsed.scheduler_gamma
+        self.scheduler_t_max: int = args_parsed.scheduler_t_max if args_parsed.scheduler_t_max is not None else self.n_epochs
+        self.scheduler_eta_min: float = args_parsed.scheduler_eta_min
+        self.scheduler_t_0: int = args_parsed.scheduler_t_0
+        self.scheduler_t_mult: int = args_parsed.scheduler_t_mult
+        self.scheduler_min_lr: float = args_parsed.scheduler_min_lr
 
         # ---------------------------
         # Model-shared knobs
@@ -176,10 +206,45 @@ class TrainingArgs:
         # Create optimizer after model is initialized
         if self.optimizer_name.lower() == 'adam':
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        
+        # Create learning rate scheduler
+        self.scheduler = self._create_scheduler()
 
         # Save hyperparameters to YAML file
         self._save_hyperparameters(args_parsed)
 
+    def _create_scheduler(self):
+        """Create learning rate scheduler based on the specified scheduler name."""
+        if self.scheduler_name.lower() == "none":
+            return None
+        elif self.scheduler_name.lower() == "step":
+            # Use custom StepLR with minimum LR limit
+            return StepLRWithMinLR(
+                self.optimizer, 
+                step_size=self.scheduler_step_size, 
+                gamma=self.scheduler_gamma,
+                min_lr=self.scheduler_min_lr
+            )
+        elif self.scheduler_name.lower() == "exponential":
+            return torch.optim.lr_scheduler.ExponentialLR(
+                self.optimizer, 
+                gamma=self.scheduler_gamma
+            )
+        elif self.scheduler_name.lower() == "cosine":
+            return torch.optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer, 
+                T_max=self.scheduler_t_max, 
+                eta_min=self.scheduler_eta_min
+            )
+        elif self.scheduler_name.lower() == "cosine_with_restarts":
+            return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+                self.optimizer, 
+                T_0=self.scheduler_t_0, 
+                T_mult=self.scheduler_t_mult, 
+                eta_min=self.scheduler_eta_min
+            )
+        else:
+            raise ValueError(f"Unknown scheduler name: {self.scheduler_name}")
 
     def _get_next_version_dir(self, exp_name, base_dir):
         """Find the next available version directory for this experiment under base_dir/exp_name."""

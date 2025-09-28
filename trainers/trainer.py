@@ -43,6 +43,8 @@ class Trainer:
 
         # Optimizer
         self.optimizer = args.optimizer
+        # Learning rate scheduler
+        self.scheduler = getattr(args, "scheduler", None)
         # Gradient accumulation
         self.grad_accum = int(getattr(args, "grad_accum", 1))
         self._accum_counter = 0
@@ -77,10 +79,13 @@ class Trainer:
         self.save_frequency = getattr(args, "save_frequency", 10)
 
         if self.verbose:
+            initial_lr = self.optimizer.param_groups[0]['lr']
+            scheduler_info = f" | Scheduler: {type(self.scheduler).__name__}" if self.scheduler else " | Scheduler: None"
             print(f"[Trainer] Device: {self.device}")
             print(f"[Trainer] Train batches: {len(self.train_loader)}"
                   + (f" | Val batches: {len(self.val_loader)}" if self.has_val else "")
                   + (f" | Test batches: {len(self.test_loader)}" if self.has_test else ""))
+            print(f"[Trainer] Initial LR: {initial_lr:.2e}{scheduler_info}")
             print(f"[Trainer] AMP: {self.use_amp} | GradAccum: x{self.grad_accum} | EarlyStopping: {self.use_early_stopping} (patience={self.patience})")
 
     # Steps
@@ -140,10 +145,11 @@ class Trainer:
                 if self.writer:
                     self.writer.add_scalar("loss/train_step", loss, self.global_step)
 
-                # Show accumulation status in progress bar
+                # Show accumulation status and learning rate in progress bar
                 accum_status = f"{self._accum_counter}/{self.grad_accum}" if self.grad_accum > 1 else "1/1"
                 stepped = "✓" if self._last_stepped else "·"
-                pbar.set_postfix(train_loss=f"{loss:.6f}", accum=accum_status, step=stepped)
+                current_lr = self.optimizer.param_groups[0]['lr']
+                pbar.set_postfix(train_loss=f"{loss:.6f}", lr=f"{current_lr:.2e}", accum=accum_status, step=stepped)
                 self.global_step += 1
 
             # Flush any remaining accumulated gradients at epoch end
@@ -159,6 +165,10 @@ class Trainer:
             train_loss = float(np.mean(epoch_losses)) if epoch_losses else float("nan")
             if self.writer:
                 self.writer.add_scalar("loss/train_epoch", train_loss, epoch)
+                # Log current learning rate
+                if self.scheduler is not None:
+                    current_lr = self.scheduler.get_last_lr()[0] if hasattr(self.scheduler, 'get_last_lr') else self.optimizer.param_groups[0]['lr']
+                    self.writer.add_scalar("learning_rate", current_lr, epoch)
 
             # validation
             if self.has_val:
@@ -167,7 +177,9 @@ class Trainer:
                     self.writer.add_scalar("loss/val_epoch", val_loss, epoch)
 
                 if self.verbose:
-                    print(f"Epoch {epoch}: train={train_loss:.6f} | val={val_loss:.6f}")
+                    # Get current learning rate for logging
+                    current_lr = self.optimizer.param_groups[0]['lr']
+                    print(f"Epoch {epoch}: train={train_loss:.6f} | val={val_loss:.6f} | lr={current_lr:.2e}")
 
                 if self.use_early_stopping:
                     improved = (val_loss < self.best_val)
@@ -188,7 +200,13 @@ class Trainer:
                             stop_early = True
             else:
                 if self.verbose:
-                    print(f"Epoch {epoch}: train={train_loss:.6f}")
+                    # Get current learning rate for logging
+                    current_lr = self.optimizer.param_groups[0]['lr']
+                    print(f"Epoch {epoch}: train={train_loss:.6f} | lr={current_lr:.2e}")
+
+            # Learning rate scheduler step
+            if self.scheduler is not None:
+                self.scheduler.step()
 
             # periodic checkpoint
             if (epoch % self.save_frequency) == 0:
@@ -229,6 +247,9 @@ class Trainer:
             "best_val": getattr(self, "best_val", None),
             "best_epoch": getattr(self, "best_epoch", None),
         }
+        # Add scheduler state if scheduler exists
+        if self.scheduler is not None:
+            payload["scheduler_state_dict"] = self.scheduler.state_dict()
         if epoch == "final":
             path = os.path.join(self.checkpoint_dir, "final.pth")
         else:
