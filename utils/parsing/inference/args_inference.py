@@ -56,6 +56,13 @@ class InferenceArgs:
             cfg = yaml.safe_load(f)
             self.t_max = cfg['t_max']
             self.image_shape = cfg['image_shape']
+            
+            # Load beta schedule parameters for proper DDPM initialization
+            # Use command line overrides if provided, otherwise use YAML values, with fallback defaults
+            self.beta_schedule = args_parsed.beta_schedule or cfg.get('beta_schedule', 'cosine')
+            self.beta_start = args_parsed.beta_start or cfg.get('beta_start', 1e-4)
+            self.beta_end = args_parsed.beta_end or cfg.get('beta_end', 0.02)
+            
             self.model = self.load_model_from_yaml(cfg)
         self.model.load_state_dict(torch.load(self.path_to_weights)['model_state_dict'])
 

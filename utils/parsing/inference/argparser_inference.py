@@ -76,4 +76,27 @@ p.add_argument(
     help='Number of gifs to generate (0 disables).'
 )
 
+# --------------------------------------------------------------------------------------
+# Beta schedule overrides (optional - will use values from YAML if not specified)
+# --------------------------------------------------------------------------------------
+p.add_argument(
+    '--beta_schedule',
+    default=None,
+    choices=["cosine", "linear"],
+    type=str,
+    help='Override beta schedule from YAML config (optional).'
+)
+p.add_argument(
+    '--beta_start',
+    default=None,
+    type=float,
+    help='Override beta_start from YAML config (optional).'
+)
+p.add_argument(
+    '--beta_end',
+    default=None,
+    type=float,
+    help='Override beta_end from YAML config (optional).'
+)
+
 args_parsed = p.parse_args()
