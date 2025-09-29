@@ -19,9 +19,40 @@ class DDPM:
         if hasattr(args, "num_trials"):
             self.num_trials = args.num_trials
         
-        self.alphas, self.alphas_bar = self.cosine_alpha_bar()
+        # Beta schedule parameters
+        self.beta_schedule = getattr(args, "beta_schedule", "cosine")
+        self.beta_start = getattr(args, "beta_start", 1e-4)
+        self.beta_end = getattr(args, "beta_end", 0.02)
+        
+        # Initialize alpha and alpha_bar based on schedule
+        if self.beta_schedule == "linear":
+            self.alphas, self.alphas_bar = self.linear_beta_schedule()
+        else:  # cosine (default)
+            self.alphas, self.alphas_bar = self.cosine_alpha_bar()
 
     
+    def linear_beta_schedule(self):
+        """
+        Linear beta schedule from beta_start to beta_end over T timesteps.
+        
+        Returns:
+            alphas: [T] tensor where alpha_t = 1 - beta_t
+            alphas_bar: [T+1] tensor where alpha_bar_t = prod(alpha_1, ..., alpha_t)
+        """
+        T = self.t_max
+        # Linear interpolation from beta_start to beta_end
+        betas = torch.linspace(self.beta_start, self.beta_end, T, dtype=torch.float64)
+        alphas = 1.0 - betas
+        
+        # Compute cumulative product for alpha_bar
+        # alpha_bar[0] = 1.0 (at t=0, no noise)
+        # alpha_bar[t] = prod(alpha_1, ..., alpha_t) for t >= 1
+        alpha_bar = torch.zeros(T + 1, dtype=torch.float64)
+        alpha_bar[0] = 1.0
+        alpha_bar[1:] = torch.cumprod(alphas, dim=0)
+        
+        return alphas.float(), alpha_bar.float()
+
     def cosine_alpha_bar(self, s: float = 0.08):
         """
         Nichol & Dhariwal alphas : enable linear decay of signal to noise ratio

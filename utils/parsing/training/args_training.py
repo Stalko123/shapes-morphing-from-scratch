@@ -76,6 +76,9 @@ class TrainingArgs:
         # Diffusion schedule / MC
         # ---------------------------
         self.num_trials: int = args_parsed.num_trials
+        self.beta_schedule: str = args_parsed.beta_schedule
+        self.beta_start: float = args_parsed.beta_start
+        self.beta_end: float = args_parsed.beta_end
         
         # ---------------------------
         # Training hyperparameters

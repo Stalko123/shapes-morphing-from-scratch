@@ -74,6 +74,25 @@ p.add_argument(
     type=int,
     help="Number of Monte Carlo samples used inside the loss (if applicable)."
 )
+p.add_argument(
+    '--beta_schedule',
+    default="cosine",
+    choices=["cosine", "linear"],
+    type=str,
+    help='Beta schedule type for diffusion process. cosine: Nichol & Dhariwal cosine schedule, linear: linear schedule from beta_start to beta_end.'
+)
+p.add_argument(
+    '--beta_start',
+    default=1e-4,
+    type=float,
+    help='Starting value for linear beta schedule (ignored if beta_schedule != linear).'
+)
+p.add_argument(
+    '--beta_end',
+    default=0.02,
+    type=float,
+    help='Ending value for linear beta schedule (ignored if beta_schedule != linear).'
+)
 
 # --------------------------------------------------------------------------------------
 # Training hyperparameters

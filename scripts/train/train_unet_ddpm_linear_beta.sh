@@ -1,0 +1,53 @@
+#!/bin/bash
+export PYTHONPATH=$(pwd)
+
+# Example training script using the new linear beta schedule
+# This demonstrates the linear schedule from β₁=10⁻⁴ to βₜ=0.02 over T=1000 timesteps
+
+python trainers/trainer.py \
+    --t_max 1000 \
+    --n_epochs 1000 \
+    --verbose \
+    --model "u-net" \
+    --dataset_name "CIFAR10" \
+    --batch_size 32 \
+    --validation \
+    --test \
+    --val_ratio 0.1 \
+    --seed 42 \
+    --num_trials 1 \
+    --learning_rate 2e-4 \
+    --dropout 0 \
+    --optimizer_name "Adam" \
+    --grad_clip 2 \
+    --patience 400 \
+    --activation "silu" \
+    --time_base_dim 256 \
+    --time_hidden 1024 \
+    --time_output_dim 1024 \
+    --init_scheme "auto" \
+    --base_channels 128 \
+    --channel_mults 1,2,4,8 \
+    --num_res_blocks 2 \
+    --upsample "nearest_conv" \
+    --groups 32 \
+    --num_res_blocks_in_bottleneck 3 \
+    --norm_2d "group" \
+    --stem_kernel 3 \
+    --head_kernel 3 \
+    --downsample "stride" \
+    --log_dir "./logs/linear_beta" \
+    --checkpoint_dir "./checkpoints/linear_beta" \
+    --save_frequency 10 \
+    --output_dir "./outputs/linear_beta" \
+    --attn_stages True,True,True,True \
+    --attn_num_heads 4 \
+    --attn_in_bottleneck \
+    --grad_accum 64 \
+    --scheduler_name "step" \
+    --scheduler_step_size 5 \
+    --scheduler_gamma 0.7 \
+    --scheduler_min_lr 1e-5 \
+    --beta_schedule "linear" \
+    --beta_start 1e-4 \
+    --beta_end 0.02
